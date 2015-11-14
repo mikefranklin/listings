@@ -22,18 +22,39 @@ def show_listings():
     return render_template("index.html")
 
 
+@app.route("/getalldata")
+def get_data():
+    " retrieve all listings, return header info + data"
+
+    listings = list(mongo.db.listings.find())
+    unique = sorted(list({key for listing in listings for key in listing.keys()}))
+    headers = {key: {"key": key, "position": index, "id": index}  # id:index is temp.
+               for index, key in enumerate(unique)}
+    return json.dumps({"headers": headers, "listings": listings},
+                      default=json_util.default)
+
+
+@app.route("/getheaders")
+def get_headers():
+    """ retrieve unique headers from all documents """
+    listings = mongo.db.listings.find()
+    unique = sorted(list({key for listing in listings for key in listing.keys()}))
+    headers = {key: {"key": key, "position": index, "id": index}  # id:index is temp.
+               for index, key in enumerate(unique)}
+
+    return json.dumps(headers)
+
+
 @app.route("/getlistings")
 def get_listings():
-    """ return listings as json """
+    " return listings collection as json "
 
     return json.dumps(list(mongo.db.listings.find()), default=json_util.default)
 
 
 @app.route('/import')
 def import_redfin():
-    """
-    load & save the latest redfin CSV
-    """
+    " load & save the latest redfin CSV  "
 
     listings, filedate = load_latest_listings()
     res = save_listings(listings, filedate)
@@ -41,7 +62,7 @@ def import_redfin():
 
 
 def save_listings(listings, date):
-    """ update house info """
+    " update house info "
 
     bulk = mongo.db.listings.initialize_unordered_bulk_op()
 
