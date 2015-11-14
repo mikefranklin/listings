@@ -22,47 +22,18 @@ function retryAjax(params, options) {
 } // function retryAjax
 
 var Header = React.createClass({
-    loadHeaders() {
-        retryAjax({}, {api: "/getheaders", type: "get"})
-            .done(function(data) {
-                this.setState({headerItems: data})
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-    },
-    handleSortableUpdate() {
-        var newItems = _.clone(this.state.headerItems, true),
-            node = $(ReactDOM.findDOMNode(this)),
-            ids = node.sortable("toArray", {attribute: "data-id"});
-
-        ids.forEach((id, index) => {
-            _.find(newItems, (item) => {return item.id == id}).position = index;
-        });
-
-        node.sortable("cancel");
-        this.setState({headerItems: newItems});
-    },
     getInitialState() {
-        return {headerItems: {}}
+        return {headers: {}}
     },
     componentDidMount() {
-        this.loadHeaders()
-        $(ReactDOM.findDOMNode(this)).sortable({
-            cursor: "move",
-            items: 'div',
-            update: this.handleSortableUpdate
-            // placeholder: "" - classNames
-            // handle .sorthandle
-        });
+        this.props.createSortable(this)
     },
     render() {
-        var items = _.chain(this.state.headerItems) //  {fld: {position:, key: fld, ...}, ...}
-                        .sortBy((data) => {return data.position}) // returns array
+        var items = _.chain(this.props.headers) //  [{position:, key: fld, ...}, ...]
                         .map((data) => {
                             return (<HeaderItem key={data.key} data={data}/>)
                         }).value()
-        return (<div className="row header">{items}</div>);
+        return (<div ref="header" className="row header">{items}</div>);
     }
 })
 
@@ -76,39 +47,16 @@ var HeaderItem = React.createClass({
     }
 })
 
-var Listings = React.createClass({
-    loadListings() {
-        retryAjax({}, {api: "/getlistings", type: "get"})
-            .done(function(data){
-                this.setState({listings: data})
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-    },
+var House = React.createClass({
     getInitialState() {
-        return {listings: [{}]};
-    },
-    componentDidMount() {
-        this.loadListings()
+        return {items: {}, headers: {}}; // { fld: {id, position, key, ... etc}, ... }
     },
     render() {
-        var houses = this.state.listings.map(function(listing) {
-                    return (<House key={listing._id} items={listing} />)
-                });
-        return (<div id="houses">{houses}</div>);
-    }
-});
-
-var House = React.createClass({
-    getInitialState: function() {
-        return {items: {}};
-    },
-    render: function() {
-        var houseItems =  _.map(this.props.items, function(value, key) {
-                return (<HouseItem key={key} name={key} value={value} />)
-            })
-        return (<div className="row">{houseItems}</div>);
+        var items = _.map(this.props.headers, (item) => {
+            var value = this.props.items[item.key] || ""
+            return (<HouseItem key={item.key} name={item.key} value={value} />)
+        })
+        return (<div className="row house">{items}</div>);
     }
 });
 
@@ -136,11 +84,50 @@ var HouseItem = React.createClass({
 });
 
 var App = React.createClass({
-    render: function() {
+    createSortable(ref) {
+        var sortNode = $(ReactDOM.findDOMNode(ref))
+        sortNode = sortNode.sortable({ // handle, placeholder(classname)
+            cursor: "move",
+            items: 'div',
+            update: _.bind(this.handleSortableUpdate, null, sortNode)
+        });
+    },
+    handleSortableUpdate(sortNode) {
+        var newItems = _.clone(this.state.headers, true),
+            ids = sortNode.sortable("toArray", {attribute: "data-id"});
+
+        ids.forEach((id, index) => {
+            _.find(newItems, (item) => {return item.id == id}).position = index;
+        });
+
+        sortNode.sortable("cancel");
+        this.setState({headers: _.sortBy(newItems, "position")});
+    },
+    loadData() {
+        retryAjax({}, {api: "/getalldata", type: "get"})
+            .done(function(data){
+                this.setState({listings: data.listings, headers: data.headers})
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+    },
+    getInitialState() {
+        return {listings: [], headers: []}
+    },
+    componentDidMount() {
+        this.loadData()
+    },
+    render() {
+        var houses = this.state.listings.map(function(listing) {
+                    return (
+                        <House key={listing._id} items={listing} headers={this.state.headers} />
+                    )
+                }.bind(this));
         return (
             <div className="container-fluid">
-                <Header key="0" header={[]} />
-                <Listings key="1" listing={[{}]} />
+                <Header headers={this.state.headers} createSortable = {this.createSortable}/>
+                {houses}
             </div>
         )
     }

@@ -28,8 +28,8 @@ def get_data():
 
     listings = list(mongo.db.listings.find())
     unique = sorted(list({key for listing in listings for key in listing.keys()}))
-    headers = {key: {"key": key, "position": index, "id": index}  # id:index is temp.
-               for index, key in enumerate(unique)}
+    headers = [{"key": key, "position": index, "id": index}  # id:index is temp.
+               for index, key in enumerate(unique)]
     return json.dumps({"headers": headers, "listings": listings},
                       default=json_util.default)
 

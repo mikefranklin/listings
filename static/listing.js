@@ -26,51 +26,20 @@ function retryAjax(params, options) {
 
 var Header = React.createClass({
     displayName: "Header",
-    loadHeaders: function loadHeaders() {
-        retryAjax({}, { api: "/getheaders", type: "get" }).done((function (data) {
-            this.setState({ headerItems: data });
-        }).bind(this)).fail((function () {
-            console.log(arguments);
-        }).bind(this));
-    },
-    handleSortableUpdate: function handleSortableUpdate() {
-        var newItems = _.clone(this.state.headerItems, true),
-            node = $(ReactDOM.findDOMNode(this)),
-            ids = node.sortable("toArray", { attribute: "data-id" });
-
-        ids.forEach(function (id, index) {
-            _.find(newItems, function (item) {
-                return item.id == id;
-            }).position = index;
-        });
-
-        node.sortable("cancel");
-        this.setState({ headerItems: newItems });
-    },
     getInitialState: function getInitialState() {
-        return { headerItems: {} };
+        return { headers: {} };
     },
     componentDidMount: function componentDidMount() {
-        this.loadHeaders();
-        $(ReactDOM.findDOMNode(this)).sortable({
-            cursor: "move",
-            items: 'div',
-            update: this.handleSortableUpdate
-            // placeholder: "" - classNames
-            // handle .sorthandle
-        });
+        this.props.createSortable(this);
     },
     render: function render() {
-        var items = _.chain(this.state.headerItems) //  {fld: {position:, key: fld, ...}, ...}
-        .sortBy(function (data) {
-            return data.position;
-        }) // returns array
+        var items = _.chain(this.props.headers) //  [{position:, key: fld, ...}, ...]
         .map(function (data) {
             return React.createElement(HeaderItem, { key: data.key, data: data });
         }).value();
         return React.createElement(
             "div",
-            { className: "row header" },
+            { ref: "header", className: "row header" },
             items
         );
     }
@@ -92,47 +61,22 @@ var HeaderItem = React.createClass({
     }
 });
 
-var Listings = React.createClass({
-    displayName: "Listings",
-    loadListings: function loadListings() {
-        retryAjax({}, { api: "/getlistings", type: "get" }).done((function (data) {
-            this.setState({ listings: data });
-        }).bind(this)).fail((function () {
-            console.log(arguments);
-        }).bind(this));
-    },
-    getInitialState: function getInitialState() {
-        return { listings: [{}] };
-    },
-    componentDidMount: function componentDidMount() {
-        this.loadListings();
-    },
-    render: function render() {
-        var houses = this.state.listings.map(function (listing) {
-            return React.createElement(House, { key: listing._id, items: listing });
-        });
-        return React.createElement(
-            "div",
-            { id: "houses" },
-            houses
-        );
-    }
-});
-
 var House = React.createClass({
     displayName: "House",
-
     getInitialState: function getInitialState() {
-        return { items: {} };
+        return { items: {}, headers: {} }; // { fld: {id, position, key, ... etc}, ... }
     },
     render: function render() {
-        var houseItems = _.map(this.props.items, function (value, key) {
-            return React.createElement(HouseItem, { key: key, name: key, value: value });
+        var _this = this;
+
+        var items = _.map(this.props.headers, function (item) {
+            var value = _this.props.items[item.key] || "";
+            return React.createElement(HouseItem, { key: item.key, name: item.key, value: value });
         });
         return React.createElement(
             "div",
-            { className: "row" },
-            houseItems
+            { className: "row house" },
+            items
         );
     }
 });
@@ -171,13 +115,49 @@ var HouseItem = React.createClass({
 
 var App = React.createClass({
     displayName: "App",
+    createSortable: function createSortable(ref) {
+        var sortNode = $(ReactDOM.findDOMNode(ref));
+        sortNode = sortNode.sortable({ // handle, placeholder(classname)
+            cursor: "move",
+            items: 'div',
+            update: _.bind(this.handleSortableUpdate, null, sortNode)
+        });
+    },
+    handleSortableUpdate: function handleSortableUpdate(sortNode) {
+        var newItems = _.clone(this.state.headers, true),
+            ids = sortNode.sortable("toArray", { attribute: "data-id" });
 
+        ids.forEach(function (id, index) {
+            _.find(newItems, function (item) {
+                return item.id == id;
+            }).position = index;
+        });
+
+        sortNode.sortable("cancel");
+        this.setState({ headers: _.sortBy(newItems, "position") });
+    },
+    loadData: function loadData() {
+        retryAjax({}, { api: "/getalldata", type: "get" }).done((function (data) {
+            this.setState({ listings: data.listings, headers: data.headers });
+        }).bind(this)).fail((function () {
+            console.log(arguments);
+        }).bind(this));
+    },
+    getInitialState: function getInitialState() {
+        return { listings: [], headers: [] };
+    },
+    componentDidMount: function componentDidMount() {
+        this.loadData();
+    },
     render: function render() {
+        var houses = this.state.listings.map((function (listing) {
+            return React.createElement(House, { key: listing._id, items: listing, headers: this.state.headers });
+        }).bind(this));
         return React.createElement(
             "div",
             { className: "container-fluid" },
-            React.createElement(Header, { key: "0", header: [] }),
-            React.createElement(Listings, { key: "1", listing: [{}] })
+            React.createElement(Header, { headers: this.state.headers, createSortable: this.createSortable }),
+            houses
         );
     }
 });
