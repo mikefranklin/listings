@@ -1,5 +1,6 @@
 from flask import Flask, render_template
 from flask.ext.pymongo import PyMongo
+from bson import json_util
 import os
 import csv
 import json
@@ -19,6 +20,13 @@ def show_listings():
     """ show listings """
 
     return render_template("index.html")
+
+
+@app.route("/getlistings")
+def get_listings():
+    """ return listings as json """
+
+    return json.dumps(list(mongo.db.listings.find()), default=json_util.default)
 
 
 @app.route('/import')
@@ -48,13 +56,14 @@ def save_listings(listings, date):
 
 def load_latest_listings():
     " find & import the latest redfin csv file as a dict & date "
-    # redfin_2015-11-12-14-27-48_results
 
     dir = "/Users/michaelfranklin/Downloads"
+    format = "redfin_%Y-%m-%d-%H-%M-%S_results.csv"
+
     files = [file for file in os.listdir(dir)
              if file.startswith("redfin") and file.endswith("results.csv")]
     file = sorted(files)[-1]
-    date = datetime.strptime(file[7:-12], "%Y-%m-%d-%H-%M-%S")
+    date = datetime.strptime(file, format)
 
     with open("{}/{}".format(dir, file)) as csvfile:
         reader = csv.reader(csvfile)
