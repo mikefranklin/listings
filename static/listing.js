@@ -30,10 +30,10 @@ var Header = React.createClass({
         return { headers: {} };
     },
     componentDidMount: function componentDidMount() {
-        this.props.createSortable(this, "headers");
+        this.props.createSortable(this, "data");
     },
     render: function render() {
-        var items = _.map(this.props.headers, function (header) {
+        var items = _.map(this.props.data, function (header) {
             return React.createElement(HeaderItem, { key: header._id, data: header });
         });
         return React.createElement(
@@ -63,13 +63,11 @@ var HeaderItem = React.createClass({
 var House = React.createClass({
     displayName: "House",
     getInitialState: function getInitialState() {
-        return { items: {}, headers: {} };
+        return { data: {}, row: 0 };
     },
     render: function render() {
-        var _this = this;
-
-        var items = _.map(this.props.headers, function (header, index) {
-            var value = _this.props.items[index];
+        var items = _.map(this.props.data, function (header, index) {
+            var value = header.data[index];
             return React.createElement(HouseItem, { key: header._id, name: header.fieldname, value: value });
         });
         return React.createElement(
@@ -113,8 +111,8 @@ var HouseItem = React.createClass({
 });
 
 /*
-headers = [{ "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0","text": "_id","show": true} ...]
-
+headers = [{ data = [1, 2, ...], "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0",
+        "text": "_id","show": true} ...]
 */
 var App = React.createClass({
     displayName: "App",
@@ -133,38 +131,43 @@ var App = React.createClass({
 
         ids.forEach(function (id, index) {
             _.find(newItems, function (item) {
-                return item.id == id;
-            }).position = index;
+                return item._id == id;
+            }).sequence = index;
         });
 
-        newState[dataName] = _.sortBy(newItems, "position"); // resequence data. or add data to header in python//fields
+        newState[dataName] = _.sortBy(newItems, "sequence");
         sortNode.sortable("cancel");
         this.setState(newState);
     },
     loadData: function loadData() {
-        retryAjax({}, { api: "/getalldata", type: "get" }).done((function (data) {
-            this.setState({ listings: data.listings, headers: data.headers });
+        retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
+            this.setState(content); // {data: [headers]}
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
     },
     getInitialState: function getInitialState() {
-        return { listings: [], headers: [] };
+        return { data: {} };
     },
     componentDidMount: function componentDidMount() {
         this.loadData();
     },
     render: function render() {
-        var idIndex = _.findIndex(this.state.headers, function (h) {
+        var houseIds = _.find(this.state.data, function (h) {
             return h.redfin = "_id";
         }),
-            houses = this.state.listings.map((function (listing) {
-            return React.createElement(House, { key: listing[idIndex], items: listing, headers: this.state.headers });
-        }).bind(this));
+            houses = "";
+
+        if (houseIds) {
+            houses = houseIds.data.map((function (id, row) {
+                return React.createElement(House, { key: id, data: this.state.data, row: row });
+            }).bind(this));
+        }
+
         return React.createElement(
             "div",
             { className: "container-fluid" },
-            React.createElement(Header, { headers: this.state.headers, createSortable: this.createSortable }),
+            React.createElement(Header, { data: this.state.data, createSortable: this.createSortable }),
             houses
         );
     }

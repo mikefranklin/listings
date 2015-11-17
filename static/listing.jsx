@@ -26,10 +26,10 @@ var Header = React.createClass({
         return {headers: {}}
     },
     componentDidMount() {
-        this.props.createSortable(this, "headers")
+        this.props.createSortable(this, "data")
     },
     render() {
-        var items = _.map(this.props.headers, (header) => {
+        var items = _.map(this.props.data, (header) => {
                             return (
                                 <HeaderItem key={header._id} data={header}/>
                             )
@@ -52,11 +52,11 @@ var HeaderItem = React.createClass({
 
 var House = React.createClass({
     getInitialState() {
-        return {items: {}, headers: {}};
+        return {data: {}, row: 0};
     },
     render() {
-        var items = _.map(this.props.headers, (header, index) => {
-            var value = this.props.items[index]
+        var items = _.map(this.props.data, (header, index) => {
+            var value = header.data[index]
             return (<HouseItem key={header._id} name={header.fieldname} value={value} />)
         })
         return (<div className="row house">{items}</div>);
@@ -87,8 +87,8 @@ var HouseItem = React.createClass({
 });
 
 /*
-headers = [{ "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0","text": "_id","show": true} ...]
-
+headers = [{ data = [1, 2, ...], "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0",
+        "text": "_id","show": true} ...]
 */
 var App = React.createClass({
     createSortable(ref, dataName) {
@@ -105,38 +105,41 @@ var App = React.createClass({
             newState ={}
 
         ids.forEach((id, index) => {
-            _.find(newItems, (item) => {return item.id == id}).position = index;
+            _.find(newItems, (item) => {return item._id == id}).sequence = index;
         });
 
-        newState[dataName] = _.sortBy(newItems, "position") // resequence data. or add data to header in python//fields
+        newState[dataName] = _.sortBy(newItems, "sequence")
         sortNode.sortable("cancel");
         this.setState(newState);
     },
     loadData() {
         retryAjax({}, {api: "/getalldata", type: "get"})
-            .done(function(data){
-                this.setState({listings: data.listings, headers: data.headers})
+            .done(function(content){
+                this.setState(content) // {data: [headers]}
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
             }.bind(this))
     },
     getInitialState() {
-        return {listings: [], headers: []}
+        return {data: {}}
     },
     componentDidMount() {
         this.loadData()
     },
     render() {
-        var idIndex = _.findIndex(this.state.headers, function(h) {return h.redfin = "_id"}),
-            houses = this.state.listings.map(function(listing) {
-                    return (
-                        <House key={listing[idIndex]} items={listing} headers={this.state.headers} />
-                    )
+        var houseIds = _.find(this.state.data, function(h) {return h.redfin = "_id"}),
+            houses = "";
+
+        if (houseIds) {
+            houses = houseIds.data.map(function(id, row) {
+                    return (<House key={id} data={this.state.data} row={row} />)
                 }.bind(this));
+        }
+
         return (
             <div className="container-fluid">
-                <Header headers={this.state.headers} createSortable={this.createSortable}/>
+                <Header data={this.state.data} createSortable={this.createSortable}/>
                 {houses}
             </div>
         )

@@ -47,18 +47,18 @@ def get_data():
 
     listings = list(mongo.db.listings.find())
     headers = update_and_retrieve_headers(listings)
-    data = reformat_listings(listings, headers)
+    merge_listings_with_headers(listings, headers)
 
-    return json.dumps({"headers": headers, "listings": data},
-                      default=json_util.default)
+    return json.dumps({"data": headers}, default=json_util.default)
 
 
-def reformat_listings(raw, headers):
-    " return data for each header item, in the right sequence "
+def merge_listings_with_headers(listings, headers):
+    " add array of data to each header "
 
-    sorted_headers = sorted(headers, key=lambda h: h["sequence"])
+    # ? add encodings for listifyable data (e.g. city, location, realtor)
 
-    return [[l.get(h["redfin"]) for h in sorted_headers] for l in raw]
+    for header in headers:
+        header["data"] = [listing.get(header["redfin"]) for listing in listings]
 
 
 def update_and_retrieve_headers(listings):
