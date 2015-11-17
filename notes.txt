@@ -1,0 +1,15 @@
+-  listings collection = house listings
+- headers - headers + info
+
+{redfin: {"_default": {stuff},
+       "userid": {stuff}
+       }
+}
+
+redfin = text returned from csv header
+
+
+stuff:
+"sequence" - ordering
+"key" - use for a) react key, b) class
+"text" - displayname

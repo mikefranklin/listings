@@ -26,14 +26,15 @@ var Header = React.createClass({
         return {headers: {}}
     },
     componentDidMount() {
-        this.props.createSortable(this)
+        this.props.createSortable(this, "headers")
     },
     render() {
-        var items = _.chain(this.props.headers) //  [{position:, key: fld, ...}, ...]
-                        .map((data) => {
-                            return (<HeaderItem key={data.key} data={data}/>)
-                        }).value()
-        return (<div ref="header" className="row header">{items}</div>);
+        var items = _.map(this.props.headers, (header) => {
+                            return (
+                                <HeaderItem key={header._id} data={header}/>
+                            )
+                        })
+        return (<div className="row header">{items}</div>);
     }
 })
 
@@ -42,19 +43,21 @@ var HeaderItem = React.createClass({
         return {data: {}}
     },
     render() { //data-position={data.position}
-        var data = this.props.data;
-        return (<div data-position={data.position} data-id={data.id} className="col-md-2">{data.key}</div>)
+        var data = this.props.data
+        return (
+            <div data-position={data.sequence} data-id={data._id} className="col-md-2">{data.text}</div>
+        )
     }
 })
 
 var House = React.createClass({
     getInitialState() {
-        return {items: {}, headers: {}}; // { fld: {id, position, key, ... etc}, ... }
+        return {items: {}, headers: {}};
     },
     render() {
-        var items = _.map(this.props.headers, (item) => {
-            var value = this.props.items[item.key] || ""
-            return (<HouseItem key={item.key} name={item.key} value={value} />)
+        var items = _.map(this.props.headers, (header, index) => {
+            var value = this.props.items[index]
+            return (<HouseItem key={header._id} name={header.fieldname} value={value} />)
         })
         return (<div className="row house">{items}</div>);
     }
@@ -66,7 +69,7 @@ var HouseItem = React.createClass({
     formatter_string(s) { return s },
     formatter_object(obj) {
         var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
-        return f ? this["formatter_" + f[1]](obj) : this.formatter.undef()
+        return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
     },
     formatter(value) {
         return (this["formatter_" + (typeof value)] || this.formatter_undef)(value)
@@ -83,25 +86,31 @@ var HouseItem = React.createClass({
     }
 });
 
+/*
+headers = [{ "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0","text": "_id","show": true} ...]
+
+*/
 var App = React.createClass({
-    createSortable(ref) {
+    createSortable(ref, dataName) {
         var sortNode = $(ReactDOM.findDOMNode(ref))
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
             items: 'div',
-            update: _.bind(this.handleSortableUpdate, null, sortNode)
+            update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
         });
     },
-    handleSortableUpdate(sortNode) {
-        var newItems = _.clone(this.state.headers, true),
-            ids = sortNode.sortable("toArray", {attribute: "data-id"});
+    handleSortableUpdate(sortNode, dataName) {
+        var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
+            newItems = _.clone(this.state[dataName], true),
+            newState ={}
 
         ids.forEach((id, index) => {
             _.find(newItems, (item) => {return item.id == id}).position = index;
         });
 
+        newState[dataName] = _.sortBy(newItems, "position") // resequence data. or add data to header in python//fields
         sortNode.sortable("cancel");
-        this.setState({headers: _.sortBy(newItems, "position")});
+        this.setState(newState);
     },
     loadData() {
         retryAjax({}, {api: "/getalldata", type: "get"})
@@ -119,14 +128,15 @@ var App = React.createClass({
         this.loadData()
     },
     render() {
-        var houses = this.state.listings.map(function(listing) {
+        var idIndex = _.findIndex(this.state.headers, function(h) {return h.redfin = "_id"}),
+            houses = this.state.listings.map(function(listing) {
                     return (
-                        <House key={listing._id} items={listing} headers={this.state.headers} />
+                        <House key={listing[idIndex]} items={listing} headers={this.state.headers} />
                     )
                 }.bind(this));
         return (
             <div className="container-fluid">
-                <Header headers={this.state.headers} createSortable = {this.createSortable}/>
+                <Header headers={this.state.headers} createSortable={this.createSortable}/>
                 {houses}
             </div>
         )

@@ -1,0 +1,24 @@
+.row.header {
+  border-bottom: solid blue 2px;
+  margin-bottom: 3px;
+  padding-bottom: 3px;
+}
+
+.row.header div {
+  text-align: center;
+  border: solid #ccc 1px;
+  border-radius: 20px;
+  padding: 5px;
+  margin-bottom: 3px;
+}
+
+.row.header div.headerHover,
+.row.house div.headerHover {
+  background-color: #eee
+}
+
+.row.house {
+  border-bottom: solid #444;
+  padding-bottom: 3px;
+  margin-bottom: 3px;
+}

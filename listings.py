@@ -9,6 +9,10 @@ from datetime import datetime
 app = Flask(__name__)
 mongo = PyMongo(app)
 
+entry = lambda index, text: {"redfin": text, "_id": index,
+                             "_default": {"sequence": index, "text": text, "show": True,
+                                          "fieldname": "field{}".format(index)}}
+
 
 @app.route('/')
 def hello_world():
@@ -22,39 +26,66 @@ def show_listings():
     return render_template("index.html")
 
 
+@app.route("/setup")
+def setup():
+    " use existing headers & setup basic header info"
+
+    listings = list(mongo.db.listings.find())
+    unique = sorted({key for listing in listings for key in listing.keys()})
+    headers = [entry(index, text) for index, text in enumerate(unique)]
+
+    mongo.db.headers.drop()
+    for header in headers:
+        mongo.db.headers.insert_one(header)
+
+    return json.dumps(headers)
+
+
 @app.route("/getalldata")
 def get_data():
     " retrieve all listings, return header info + data"
 
     listings = list(mongo.db.listings.find())
-    unique = sorted(list({key for listing in listings for key in listing.keys()}))
-    headers = [{"key": key, "position": index, "id": index}  # id:index is temp.
-               for index, key in enumerate(unique)]
-    return json.dumps({"headers": headers, "listings": listings},
+    headers = update_and_retrieve_headers(listings)
+    data = reformat_listings(listings, headers)
+
+    return json.dumps({"headers": headers, "listings": data},
                       default=json_util.default)
 
 
-@app.route("/getheaders")
-def get_headers():
-    """ retrieve unique headers from all documents """
-    listings = mongo.db.listings.find()
-    unique = sorted(list({key for listing in listings for key in listing.keys()}))
-    headers = {key: {"key": key, "position": index, "id": index}  # id:index is temp.
-               for index, key in enumerate(unique)}
+def reformat_listings(raw, headers):
+    " return data for each header item, in the right sequence "
 
-    return json.dumps(headers)
+    sorted_headers = sorted(headers, key=lambda h: h["sequence"])
+
+    return [[l.get(h["redfin"]) for h in sorted_headers] for l in raw]
 
 
-@app.route("/getlistings")
-def get_listings():
-    " return listings collection as json "
+def update_and_retrieve_headers(listings):
+    "  get headers collection + update with any new listing-headers "
 
-    return json.dumps(list(mongo.db.listings.find()), default=json_util.default)
+    headers = list(mongo.db.headers.find())  # headers in DB
+    db_names = [header["redfin"] for header in headers]
+    listing_names = {key for listing in listings for key in listing.keys()}
+
+    missing = [header for header in listing_names if header not in db_names]
+
+    if len(missing):
+        index = max(header["_id"] for header in headers)
+        for header in sorted(missing):
+            index += 1
+            mongo.db.headers.insert_one(entry(index, header))
+            headers.append(entry(index, header))
+
+    for header in headers:
+        header.update(header.pop("_default"))  # should merge with user data, if any
+
+    return headers
 
 
 @app.route('/import')
 def import_redfin():
-    " load & save the latest redfin CSV  "
+    " load & save the latest redfin CSV "
 
     listings, filedate = load_latest_listings()
     res = save_listings(listings, filedate)
