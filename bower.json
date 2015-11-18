@@ -25,6 +25,7 @@
     "jquery-ui": "jqueryui#~1.11.4",
     "bootstrap": "3.3.4",
     "font-awesome": "~4.4.0",
-    "react": "~0.14.2"
+    "react": "~0.14.2",
+    "react-bootstrap": "~0.28.1"
   }
 }

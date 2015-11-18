@@ -1,2 +1,4 @@
 .python-version
 bower_components/
+.ipynb_checkpoints/
+*.ipynb

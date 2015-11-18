@@ -49,12 +49,17 @@ var HeaderItem = React.createClass({
     getInitialState: function getInitialState() {
         return { data: {} };
     },
+    handleClick: function handleClick() {
+        console.log(this);
+    },
     render: function render() {
         //data-position={data.position}
         var data = this.props.data;
         return React.createElement(
             "div",
             { "data-position": data.sequence, "data-id": data._id, className: "col-md-2" },
+            React.createElement("i", { className: "fa fa-bars move" }),
+            React.createElement("i", { className: "fa fa-bolt opts", onClick: this.handleClick }),
             data.text
         );
     }
@@ -68,7 +73,7 @@ var House = React.createClass({
     render: function render() {
         var items = _.map(this.props.data, function (header, index) {
             var value = header.data[index];
-            return React.createElement(HouseItem, { key: header._id, name: header.fieldname, value: value });
+            return React.createElement(HouseItem, { key: header._id + ":" + index, name: header.fieldname, value: value, header: header });
         });
         return React.createElement(
             "div",
@@ -95,17 +100,91 @@ var HouseItem = React.createClass({
         });
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef();
     },
-    formatter: function formatter(value) {
+    formatter: function formatter(value, header) {
         return (this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value);
     },
     getInitialState: function getInitialState() {
-        return { name: "", value: "" };
+        return { name: "", value: "", header: {} };
     },
     render: function render() {
         return React.createElement(
             "div",
             { className: this.props.name + " col-md-2" },
-            this.formatter(this.props.value)
+            this.formatter(this.props.value, this.header)
+        );
+    }
+});
+
+var FieldModal = React.createClass({
+    displayName: "FieldModal",
+    getInitialState: function getInitialState() {
+        return { title: "", hide: "0" };
+    },
+    render: function render() {
+        return React.createElement(
+            "div",
+            { className: "modal fade fieldmodal" },
+            React.createElement(
+                "div",
+                { className: "modal-dialog" },
+                React.createElement(
+                    "div",
+                    { className: "modal-content" },
+                    React.createElement(
+                        "div",
+                        { className: "modal-header" },
+                        React.createElement(
+                            "button",
+                            { type: "button", className: "close", "data-dismiss": "modal", "aria-label": "Close" },
+                            React.createElement(
+                                "span",
+                                { "aria-hidden": "true" },
+                                "×"
+                            )
+                        ),
+                        React.createElement(
+                            "h4",
+                            { className: "modal-title" },
+                            this.state.title
+                        )
+                    ),
+                    React.createElement(
+                        "div",
+                        { className: "modal-body" },
+                        React.createElement(
+                            "div",
+                            { className: "btn-group", "data-toggle": "buttons" },
+                            React.createElement(
+                                "label",
+                                { className: "btn " + this.props.hide ? "active btn-danger" : "btn-default" },
+                                React.createElement("input", { type: "radio", name: "show", value: "0" }),
+                                "Hide"
+                            ),
+                            React.createElement(
+                                "label",
+                                { className: "btn " + this.props.hide ? "btn-default" : "btn-success active" },
+                                React.createElement("input", { type: "radio", name: "show", value: "1" }),
+                                "Show"
+                            )
+                        )
+                    ),
+                    React.createElement(
+                        "div",
+                        { className: "modal-footer" },
+                        React.createElement("div", { className: "alert alert-warning missing hide" }),
+                        React.createElement(
+                            "button",
+                            { className: "button", className: "btn btn-default", "data-dismiss": "modal" },
+                            "Close"
+                        ),
+                        React.createElement(
+                            "button",
+                            { className: "button", className: "btn btn-primary" },
+                            "Save"
+                        )
+                    )
+                )
+            )
         );
     }
 });
@@ -121,6 +200,7 @@ var App = React.createClass({
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
             items: 'div',
+            handle: ".move",
             update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
         });
     },
@@ -168,7 +248,8 @@ var App = React.createClass({
             "div",
             { className: "container-fluid" },
             React.createElement(Header, { data: this.state.data, createSortable: this.createSortable }),
-            houses
+            houses,
+            React.createElement(FieldModal, null)
         );
     }
 });

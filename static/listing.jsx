@@ -42,10 +42,17 @@ var HeaderItem = React.createClass({
     getInitialState() {
         return {data: {}}
     },
+    handleClick() {
+        console.log(this)
+    },
     render() { //data-position={data.position}
         var data = this.props.data
         return (
-            <div data-position={data.sequence} data-id={data._id} className="col-md-2">{data.text}</div>
+            <div data-position={data.sequence} data-id={data._id} className="col-md-2">
+                <i className="fa fa-bars move"></i>
+                <i className="fa fa-bolt opts" onClick={this.handleClick}></i>
+                {data.text}
+            </div>
         )
     }
 })
@@ -57,7 +64,7 @@ var House = React.createClass({
     render() {
         var items = _.map(this.props.data, (header, index) => {
             var value = header.data[index]
-            return (<HouseItem key={header._id} name={header.fieldname} value={value} />)
+            return (<HouseItem key={header._id + ":" + index} name={header.fieldname} value={value} header = {header}/>)
         })
         return (<div className="row house">{items}</div>);
     }
@@ -71,20 +78,53 @@ var HouseItem = React.createClass({
         var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
     },
-    formatter(value) {
+    formatter(value, header) {
         return (this["formatter_" + (typeof value)] || this.formatter_undef)(value)
     },
     getInitialState() {
-        return {name: "", value: ""};
+        return {name: "", value: "", header: {}};
     },
     render() {
         return (
             <div className={this.props.name + " col-md-2"} >
-                {this.formatter(this.props.value)}
+                {this.formatter(this.props.value, this.header)}
             </div>
         );
     }
 });
+
+var FieldModal = React.createClass({
+    getInitialState() {return {title: "", hide: "0"}},
+    render() {
+        return (
+            <div className="modal fade fieldmodal">
+              <div className="modal-dialog">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <button type="button" className="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 className="modal-title">{this.state.title}</h4>
+                  </div>
+                  <div className="modal-body">
+                    <div className="btn-group" data-toggle="buttons">
+                        <label className={"btn " + this.props.hide ? "active btn-danger" : "btn-default"} >
+                            <input type="radio" name="show" value="0"/>Hide
+                        </label>
+                        <label className={"btn " + this.props.hide ? "btn-default" : "btn-success active"}>
+                            <input type="radio" name="show" value="1"/>Show
+                        </label>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <div className="alert alert-warning missing hide"></div>
+                    <button className="button" className="btn btn-default" data-dismiss="modal">Close</button>
+                    <button className="button" className="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+        )
+    }
+})
 
 /*
 headers = [{ data = [1, 2, ...], "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0",
@@ -96,6 +136,7 @@ var App = React.createClass({
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
             items: 'div',
+            handle: ".move",
             update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
         });
     },
@@ -141,6 +182,7 @@ var App = React.createClass({
             <div className="container-fluid">
                 <Header data={this.state.data} createSortable={this.createSortable}/>
                 {houses}
+                <FieldModal />
             </div>
         )
     }
