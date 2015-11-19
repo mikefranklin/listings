@@ -34,7 +34,7 @@ var Header = React.createClass({
                                 <HeaderItem key={header._id} data={header}/>
                             )
                         })
-        return (<div className="row header">{items}</div>);
+        return (<Row className="header">{items}</Row>);
     }
 })
 
@@ -48,11 +48,11 @@ var HeaderItem = React.createClass({
     render() { //data-position={data.position}
         var data = this.props.data
         return (
-            <div data-position={data.sequence} data-id={data._id} className="col-md-2">
+            <Col md={2} data-position={data.sequence} data-id={data._id}>
                 <i className="fa fa-bars move"></i>
                 <i className="fa fa-bolt opts" onClick={this.handleClick}></i>
                 {data.text}
-            </div>
+            </Col>
         )
     }
 })
@@ -66,7 +66,7 @@ var House = React.createClass({
             var value = header.data[index]
             return (<HouseItem key={header._id + ":" + index} name={header.fieldname} value={value} header = {header}/>)
         })
-        return (<div className="row house">{items}</div>);
+        return (<Row className="house">{items}</Row>);
     }
 });
 
@@ -86,9 +86,9 @@ var HouseItem = React.createClass({
     },
     render() {
         return (
-            <div className={this.props.name + " col-md-2"} >
+            <Col md={2} className={this.props.name} >
                 {this.formatter(this.props.value, this.header)}
-            </div>
+            </Col>
         );
     }
 });
@@ -97,14 +97,32 @@ var FieldModal = React.createClass({
     getInitialState() {return {title: "", hide: "0"}},
     render() {
         return (
-            <div className="modal fade fieldmodal">
-              <div className="modal-dialog">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <button type="button" className="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                    <h4 className="modal-title">{this.state.title}</h4>
-                  </div>
-                  <div className="modal-body">
+          <div className="fade fieldModel">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Title>{this.state.title}</Modal.Title>
+              </Modal.Header>
+
+              <Modal.Body>
+                  <ButtonGroup>
+                    <Button>Left</Button>
+                    <Button>Middle</Button>
+                    <Button>Right</Button>
+                  </ButtonGroup>
+              </Modal.Body>
+
+              <Modal.Footer>
+                <Button data-dismiss="modal">Close</Button>
+                <Button bsStyle="primary">Save</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </div>
+        );
+
+
+
+
+        return (
                     <div className="btn-group" data-toggle="buttons">
                         <label className={"btn " + this.props.hide ? "active btn-danger" : "btn-default"} >
                             <input type="radio" name="show" value="0"/>Hide
@@ -113,15 +131,6 @@ var FieldModal = React.createClass({
                             <input type="radio" name="show" value="1"/>Show
                         </label>
                     </div>
-                  </div>
-                  <div className="modal-footer">
-                    <div className="alert alert-warning missing hide"></div>
-                    <button className="button" className="btn btn-default" data-dismiss="modal">Close</button>
-                    <button className="button" className="btn btn-primary">Save</button>
-                  </div>
-                </div>
-              </div>
-            </div>
         )
     }
 })
@@ -179,14 +188,17 @@ var App = React.createClass({
         }
 
         return (
-            <div className="container-fluid">
+            <Grid fluid={true}>
                 <Header data={this.state.data} createSortable={this.createSortable}/>
                 {houses}
                 <FieldModal />
-            </div>
+            </Grid>
         )
     }
 })
+
+_.each("Grid,Row,Col,Modal".split(","),
+    function(m) {window[m] = ReactBootstrap[m]})
 
 ReactDOM.render(
   <App />,

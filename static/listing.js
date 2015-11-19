@@ -37,8 +37,8 @@ var Header = React.createClass({
             return React.createElement(HeaderItem, { key: header._id, data: header });
         });
         return React.createElement(
-            "div",
-            { className: "row header" },
+            Row,
+            { className: "header" },
             items
         );
     }
@@ -56,8 +56,8 @@ var HeaderItem = React.createClass({
         //data-position={data.position}
         var data = this.props.data;
         return React.createElement(
-            "div",
-            { "data-position": data.sequence, "data-id": data._id, className: "col-md-2" },
+            Col,
+            { md: 2, "data-position": data.sequence, "data-id": data._id },
             React.createElement("i", { className: "fa fa-bars move" }),
             React.createElement("i", { className: "fa fa-bolt opts", onClick: this.handleClick }),
             data.text
@@ -76,8 +76,8 @@ var House = React.createClass({
             return React.createElement(HouseItem, { key: header._id + ":" + index, name: header.fieldname, value: value, header: header });
         });
         return React.createElement(
-            "div",
-            { className: "row house" },
+            Row,
+            { className: "house" },
             items
         );
     }
@@ -108,8 +108,8 @@ var HouseItem = React.createClass({
     },
     render: function render() {
         return React.createElement(
-            "div",
-            { className: this.props.name + " col-md-2" },
+            Col,
+            { md: 2, className: this.props.name },
             this.formatter(this.props.value, this.header)
         );
     }
@@ -123,67 +123,73 @@ var FieldModal = React.createClass({
     render: function render() {
         return React.createElement(
             "div",
-            { className: "modal fade fieldmodal" },
+            { className: "fade fieldModel" },
             React.createElement(
-                "div",
-                { className: "modal-dialog" },
+                Modal.Dialog,
+                null,
                 React.createElement(
-                    "div",
-                    { className: "modal-content" },
+                    Modal.Header,
+                    null,
                     React.createElement(
-                        "div",
-                        { className: "modal-header" },
+                        Modal.Title,
+                        null,
+                        this.state.title
+                    )
+                ),
+                React.createElement(
+                    Modal.Body,
+                    null,
+                    React.createElement(
+                        ButtonGroup,
+                        null,
                         React.createElement(
-                            "button",
-                            { type: "button", className: "close", "data-dismiss": "modal", "aria-label": "Close" },
-                            React.createElement(
-                                "span",
-                                { "aria-hidden": "true" },
-                                "×"
-                            )
+                            Button,
+                            null,
+                            "Left"
                         ),
                         React.createElement(
-                            "h4",
-                            { className: "modal-title" },
-                            this.state.title
-                        )
-                    ),
-                    React.createElement(
-                        "div",
-                        { className: "modal-body" },
-                        React.createElement(
-                            "div",
-                            { className: "btn-group", "data-toggle": "buttons" },
-                            React.createElement(
-                                "label",
-                                { className: "btn " + this.props.hide ? "active btn-danger" : "btn-default" },
-                                React.createElement("input", { type: "radio", name: "show", value: "0" }),
-                                "Hide"
-                            ),
-                            React.createElement(
-                                "label",
-                                { className: "btn " + this.props.hide ? "btn-default" : "btn-success active" },
-                                React.createElement("input", { type: "radio", name: "show", value: "1" }),
-                                "Show"
-                            )
-                        )
-                    ),
-                    React.createElement(
-                        "div",
-                        { className: "modal-footer" },
-                        React.createElement("div", { className: "alert alert-warning missing hide" }),
-                        React.createElement(
-                            "button",
-                            { className: "button", className: "btn btn-default", "data-dismiss": "modal" },
-                            "Close"
+                            Button,
+                            null,
+                            "Middle"
                         ),
                         React.createElement(
-                            "button",
-                            { className: "button", className: "btn btn-primary" },
-                            "Save"
+                            Button,
+                            null,
+                            "Right"
                         )
                     )
+                ),
+                React.createElement(
+                    Modal.Footer,
+                    null,
+                    React.createElement(
+                        Button,
+                        { "data-dismiss": "modal" },
+                        "Close"
+                    ),
+                    React.createElement(
+                        Button,
+                        { bsStyle: "primary" },
+                        "Save"
+                    )
                 )
+            )
+        );
+
+        return React.createElement(
+            "div",
+            { className: "btn-group", "data-toggle": "buttons" },
+            React.createElement(
+                "label",
+                { className: "btn " + this.props.hide ? "active btn-danger" : "btn-default" },
+                React.createElement("input", { type: "radio", name: "show", value: "0" }),
+                "Hide"
+            ),
+            React.createElement(
+                "label",
+                { className: "btn " + this.props.hide ? "btn-default" : "btn-success active" },
+                React.createElement("input", { type: "radio", name: "show", value: "1" }),
+                "Show"
             )
         );
     }
@@ -245,13 +251,17 @@ var App = React.createClass({
         }
 
         return React.createElement(
-            "div",
-            { className: "container-fluid" },
+            Grid,
+            { fluid: true },
             React.createElement(Header, { data: this.state.data, createSortable: this.createSortable }),
             houses,
             React.createElement(FieldModal, null)
         );
     }
+});
+
+_.each("Grid,Row,Col,Modal".split(","), function (m) {
+    window[m] = ReactBootstrap[m];
 });
 
 ReactDOM.render(React.createElement(App, null), document.getElementById('content'));
