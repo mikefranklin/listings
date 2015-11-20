@@ -34,7 +34,11 @@ var Header = React.createClass({
                                 <HeaderItem key={header._id} data={header}/>
                             )
                         })
-        return (<Row className="header">{items}</Row>);
+        return (
+            <Row className="header">
+                {items}
+            </Row>
+        );
     }
 })
 
@@ -48,10 +52,11 @@ var HeaderItem = React.createClass({
     render() { //data-position={data.position}
         var data = this.props.data
         return (
-            <Col md={2} data-position={data.sequence} data-id={data._id}>
-                <i className="fa fa-bars move"></i>
-                <i className="fa fa-bolt opts" onClick={this.handleClick}></i>
-                {data.text}
+            <Col md={2} data-position={data.sequence} data-id={data._id} className="item">
+                <div className="btn-xsmall move" bsSize="xsmall">
+                    <i className="fa fa-bars"></i>
+                </div>
+                <FieldEditor data={data}/>
             </Col>
         )
     }
@@ -86,65 +91,61 @@ var HouseItem = React.createClass({
     },
     render() {
         return (
-            <Col md={2} className={this.props.name} >
+            <Col md={2} className={this.props.name} style={{overflow: "hidden", height: 20}} >
                 {this.formatter(this.props.value, this.header)}
             </Col>
         );
     }
 });
 
-var FieldModal = React.createClass({
-    getInitialState() {return {title: "", hide: "0"}},
+var StyleButton = React.createClass({
+    getInitialState() {
+        return {on: false, text: "", onStyle: "default"}
+    },
     render() {
-        return (
-          <div className="fade fieldModel">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Title>{this.state.title}</Modal.Title>
-              </Modal.Header>
-
-              <Modal.Body>
-                  <ButtonGroup>
-                    <Button>Left</Button>
-                    <Button>Middle</Button>
-                    <Button>Right</Button>
-                  </ButtonGroup>
-              </Modal.Body>
-
-              <Modal.Footer>
-                <Button data-dismiss="modal">Close</Button>
-                <Button bsStyle="primary">Save</Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </div>
-        );
-
-
-
-
-        return (
-                    <div className="btn-group" data-toggle="buttons">
-                        <label className={"btn " + this.props.hide ? "active btn-danger" : "btn-default"} >
-                            <input type="radio" name="show" value="0"/>Hide
-                        </label>
-                        <label className={"btn " + this.props.hide ? "btn-default" : "btn-success active"}>
-                            <input type="radio" name="show" value="1"/>Show
-                        </label>
-                    </div>
+        return (this.props.on
+            ? <Button bsStyle={this.props.onStyle} bsSize="xsmall" active>{this.props.text}</Button>
+            : <Button bsStyle="default" bsSize="xsmall">{this.props.text}</Button>
         )
     }
 })
 
-/*
-headers = [{ data = [1, 2, ...], "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0",
-        "text": "_id","show": true} ...]
-*/
+var FieldEditor = React.createClass({
+    getInitialState() {
+        return { showOverlay: false, data: {}};
+    },
+    toggle() {
+        this.setState({ showOverlay: !this.state.showOverlay });
+    },
+    render() {
+        var data = this.props.data;
+        return (
+            <div style={{ position: 'relative', float: 'left'}}>
+                <Button ref="target" onClick={this.toggle} bsSize="xsmall">
+                    {data.text}
+                </Button>
+
+                <Overlay show={this.state.showOverlay}  onHide={() => this.toggle}
+                    placement="bottom" container={this} className="field-editor"
+                    target={() => ReactDOM.findDOMNode(this.refs.target)}>
+                    <div className="field-editor">
+                        <ButtonGroup>
+                            <StyleButton on={data.hide} text="Hide" onStyle="danger" />
+                            <StyleButton on={!data.hide} text="Show" onStyle="success" />
+                        </ButtonGroup>
+                    </div>
+                </Overlay>
+          </div>
+        );
+    }
+});
+
 var App = React.createClass({
     createSortable(ref, dataName) {
         var sortNode = $(ReactDOM.findDOMNode(ref))
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
-            items: 'div',
+            items: '.item',
             handle: ".move",
             update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
         });
@@ -152,7 +153,7 @@ var App = React.createClass({
     handleSortableUpdate(sortNode, dataName) {
         var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
             newItems = _.clone(this.state[dataName], true),
-            newState ={}
+            newState ={};
 
         ids.forEach((id, index) => {
             _.find(newItems, (item) => {return item._id == id}).sequence = index;
@@ -191,13 +192,12 @@ var App = React.createClass({
             <Grid fluid={true}>
                 <Header data={this.state.data} createSortable={this.createSortable}/>
                 {houses}
-                <FieldModal />
             </Grid>
         )
     }
 })
 
-_.each("Grid,Row,Col,Modal".split(","),
+_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay".split(","),
     function(m) {window[m] = ReactBootstrap[m]})
 
 ReactDOM.render(

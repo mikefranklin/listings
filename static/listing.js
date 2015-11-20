@@ -57,10 +57,13 @@ var HeaderItem = React.createClass({
         var data = this.props.data;
         return React.createElement(
             Col,
-            { md: 2, "data-position": data.sequence, "data-id": data._id },
-            React.createElement("i", { className: "fa fa-bars move" }),
-            React.createElement("i", { className: "fa fa-bolt opts", onClick: this.handleClick }),
-            data.text
+            { md: 2, "data-position": data.sequence, "data-id": data._id, className: "item" },
+            React.createElement(
+                "div",
+                { className: "btn-xsmall move", bsSize: "xsmall" },
+                React.createElement("i", { className: "fa fa-bars" })
+            ),
+            React.createElement(FieldEditor, { data: data })
         );
     }
 });
@@ -109,103 +112,81 @@ var HouseItem = React.createClass({
     render: function render() {
         return React.createElement(
             Col,
-            { md: 2, className: this.props.name },
+            { md: 2, className: this.props.name, style: { overflow: "hidden", height: 20 } },
             this.formatter(this.props.value, this.header)
         );
     }
 });
 
-var FieldModal = React.createClass({
-    displayName: "FieldModal",
+var StyleButton = React.createClass({
+    displayName: "StyleButton",
     getInitialState: function getInitialState() {
-        return { title: "", hide: "0" };
+        return { on: false, text: "", onStyle: "default" };
     },
     render: function render() {
+        return this.props.on ? React.createElement(
+            Button,
+            { bsStyle: this.props.onStyle, bsSize: "xsmall", active: true },
+            this.props.text
+        ) : React.createElement(
+            Button,
+            { bsStyle: "default", bsSize: "xsmall" },
+            this.props.text
+        );
+    }
+});
+
+var FieldEditor = React.createClass({
+    displayName: "FieldEditor",
+    getInitialState: function getInitialState() {
+        return { showOverlay: false, data: {} };
+    },
+    toggle: function toggle() {
+        this.setState({ showOverlay: !this.state.showOverlay });
+    },
+    render: function render() {
+        var _this = this;
+
+        var data = this.props.data;
         return React.createElement(
             "div",
-            { className: "fade fieldModel" },
+            { style: { position: 'relative', float: 'left' } },
             React.createElement(
-                Modal.Dialog,
-                null,
+                Button,
+                { ref: "target", onClick: this.toggle, bsSize: "xsmall" },
+                data.text
+            ),
+            React.createElement(
+                Overlay,
+                { show: this.state.showOverlay, onHide: function onHide() {
+                        return _this.toggle;
+                    },
+                    placement: "bottom", container: this, className: "field-editor",
+                    target: function target() {
+                        return ReactDOM.findDOMNode(_this.refs.target);
+                    } },
                 React.createElement(
-                    Modal.Header,
-                    null,
-                    React.createElement(
-                        Modal.Title,
-                        null,
-                        this.state.title
-                    )
-                ),
-                React.createElement(
-                    Modal.Body,
-                    null,
+                    "div",
+                    { className: "field-editor" },
                     React.createElement(
                         ButtonGroup,
                         null,
-                        React.createElement(
-                            Button,
-                            null,
-                            "Left"
-                        ),
-                        React.createElement(
-                            Button,
-                            null,
-                            "Middle"
-                        ),
-                        React.createElement(
-                            Button,
-                            null,
-                            "Right"
-                        )
-                    )
-                ),
-                React.createElement(
-                    Modal.Footer,
-                    null,
-                    React.createElement(
-                        Button,
-                        { "data-dismiss": "modal" },
-                        "Close"
-                    ),
-                    React.createElement(
-                        Button,
-                        { bsStyle: "primary" },
-                        "Save"
+                        React.createElement(StyleButton, { on: data.hide, text: "Hide", onStyle: "danger" }),
+                        React.createElement(StyleButton, { on: !data.hide, text: "Show", onStyle: "success" })
                     )
                 )
-            )
-        );
-
-        return React.createElement(
-            "div",
-            { className: "btn-group", "data-toggle": "buttons" },
-            React.createElement(
-                "label",
-                { className: "btn " + this.props.hide ? "active btn-danger" : "btn-default" },
-                React.createElement("input", { type: "radio", name: "show", value: "0" }),
-                "Hide"
-            ),
-            React.createElement(
-                "label",
-                { className: "btn " + this.props.hide ? "btn-default" : "btn-success active" },
-                React.createElement("input", { type: "radio", name: "show", value: "1" }),
-                "Show"
             )
         );
     }
 });
 
-/*
-headers = [{ data = [1, 2, ...], "_id": 0, "redfin": "_id", sequence": 0, "fieldname": "field0",
-        "text": "_id","show": true} ...]
-*/
 var App = React.createClass({
     displayName: "App",
     createSortable: function createSortable(ref, dataName) {
         var sortNode = $(ReactDOM.findDOMNode(ref));
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
-            items: 'div',
+            items: '.item',
             handle: ".move",
             update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
         });
@@ -254,13 +235,12 @@ var App = React.createClass({
             Grid,
             { fluid: true },
             React.createElement(Header, { data: this.state.data, createSortable: this.createSortable }),
-            houses,
-            React.createElement(FieldModal, null)
+            houses
         );
     }
 });
 
-_.each("Grid,Row,Col,Modal".split(","), function (m) {
+_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay".split(","), function (m) {
     window[m] = ReactBootstrap[m];
 });
 
