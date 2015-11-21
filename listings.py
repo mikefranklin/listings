@@ -1,5 +1,6 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask.ext.pymongo import PyMongo
+from operator import itemgetter
 from bson import json_util
 import os
 import csv
@@ -49,7 +50,7 @@ def get_data():
     headers = update_and_retrieve_headers(listings)
     merge_listings_with_headers(listings, headers)
 
-    return json.dumps({"data": headers}, default=json_util.default)
+    return json.dumps({"fields": headers}, default=json_util.default)
 
 
 def merge_listings_with_headers(listings, headers):
@@ -80,7 +81,21 @@ def update_and_retrieve_headers(listings):
     for header in headers:
         header.update(header.pop("_default"))  # should merge with user data, if any
 
-    return headers
+    return sorted(headers, key=itemgetter("sequence"))
+
+
+@app.route("/saveheaderdata", methods=["PUT", "POST"])
+def save_header_data():
+    data = request.get_json(force=True)  # fieldname, data=[[_id, value]...
+
+    bulk = mongo.db.headers.initialize_unordered_bulk_op()
+    for _id, value in data["data"]:
+        print(_id, data["fieldname"], value)
+        # https://groups.google.com/forum/?hl=en#!msg/mongodb-user/AuU6eWdBMd8/ylzvQe83PVgJ
+        # > db.headers.find({_id: 0, "_default.show": true })
+        # bulk.find({'_id': _id}).update({'$set': {"_default": {data["fieldname"]: value}}})
+
+    return json.dumps(bulk.execute())
 
 
 @app.route('/import')

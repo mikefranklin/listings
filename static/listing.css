@@ -22,6 +22,11 @@
   cursor: pointer
 }
 
+.field-editor-container {
+  position: relative;
+  float: left;
+}
+
 .field-editor {
   position: absolute;
   background-color: #EEE;

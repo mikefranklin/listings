@@ -23,40 +23,33 @@ function retryAjax(params, options) {
 
 var Header = React.createClass({
     getInitialState() {
-        return {headers: {}}
+        return {fields: {}}
     },
     componentDidMount() {
-        this.props.createSortable(this, "data")
+        this.props.createSortable(this)
     },
     render() {
-        var items = _.map(this.props.data, (header) => {
-                            return (
-                                <HeaderItem key={header._id} data={header}/>
-                            )
+        var items = _.map(this.props.fields, (field) => {
+                            return (<HeaderItem key={field._id} field={field}/>)
                         })
-        return (
-            <Row className="header">
-                {items}
-            </Row>
-        );
+        return (<Row className="header">{items}</Row>);
     }
 })
 
 var HeaderItem = React.createClass({
     getInitialState() {
-        return {data: {}}
+        return {field: {}}
     },
     handleClick() {
-        console.log(this)
     },
-    render() { //data-position={data.position}
-        var data = this.props.data
+    render() {
+        var field = this.props.field
         return (
-            <Col md={2} data-position={data.sequence} data-id={data._id} className="item">
+            <Col md={2} data-position={field.sequence} data-id={field._id} className="item">
                 <div className="btn-xsmall move" bsSize="xsmall">
                     <i className="fa fa-bars"></i>
                 </div>
-                <FieldEditor data={data}/>
+                <FieldEditor field={field}/>
             </Col>
         )
     }
@@ -64,12 +57,14 @@ var HeaderItem = React.createClass({
 
 var House = React.createClass({
     getInitialState() {
-        return {data: {}, row: 0};
+        return {data: {}, fields: {}};
     },
     render() {
-        var items = _.map(this.props.data, (header, index) => {
-            var value = header.data[index]
-            return (<HouseItem key={header._id + ":" + index} name={header.fieldname} value={value} header = {header}/>)
+        var items = _.map(this.props.fields, (field, index) => {
+            return (
+                <HouseItem key={field._id} name={field.fieldname}
+                    value={this.props.data[index]} field = {field}/>
+            )
         })
         return (<Row className="house">{items}</Row>);
     }
@@ -87,12 +82,12 @@ var HouseItem = React.createClass({
         return (this["formatter_" + (typeof value)] || this.formatter_undef)(value)
     },
     getInitialState() {
-        return {name: "", value: "", header: {}};
+        return {name: "", value: "", field: {}};
     },
     render() {
         return (
             <Col md={2} className={this.props.name} style={{overflow: "hidden", height: 20}} >
-                {this.formatter(this.props.value, this.header)}
+                {this.formatter(this.props.value, this.props.field)}
             </Col>
         );
     }
@@ -112,17 +107,17 @@ var StyleButton = React.createClass({
 
 var FieldEditor = React.createClass({
     getInitialState() {
-        return { showOverlay: false, data: {}};
+        return { showOverlay: false, field: {}};
     },
     toggle() {
         this.setState({ showOverlay: !this.state.showOverlay });
     },
     render() {
-        var data = this.props.data;
+        var field = this.props.field;
         return (
-            <div style={{ position: 'relative', float: 'left'}}>
+            <div className="field-editor-container">
                 <Button ref="target" onClick={this.toggle} bsSize="xsmall">
-                    {data.text}
+                    {field.text}
                 </Button>
 
                 <Overlay show={this.state.showOverlay}  onHide={() => this.toggle}
@@ -130,8 +125,8 @@ var FieldEditor = React.createClass({
                     target={() => ReactDOM.findDOMNode(this.refs.target)}>
                     <div className="field-editor">
                         <ButtonGroup>
-                            <StyleButton on={data.hide} text="Hide" onStyle="danger" />
-                            <StyleButton on={!data.hide} text="Show" onStyle="success" />
+                            <StyleButton on={field.hide} text="Hide" onStyle="danger" />
+                            <StyleButton on={!field.hide} text="Show" onStyle="success" />
                         </ButtonGroup>
                     </div>
                 </Overlay>
@@ -141,56 +136,73 @@ var FieldEditor = React.createClass({
 });
 
 var App = React.createClass({
-    createSortable(ref, dataName) {
+    createSortable(ref) {
         var sortNode = $(ReactDOM.findDOMNode(ref))
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
             items: '.item',
             handle: ".move",
-            update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
+            update: _.bind(this.handleSortableUpdate, null, sortNode)
         });
     },
-    handleSortableUpdate(sortNode, dataName) {
+    handleSortableUpdate(sortNode) {
         var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
-            newItems = _.clone(this.state[dataName], true),
-            newState ={};
+            fields = _.clone(this.state.fields, true);
 
         ids.forEach((id, index) => {
-            _.find(newItems, (item) => {return item._id == id}).sequence = index;
+            _.find(fields, (item) => {return item._id == id}).sequence = index;
         });
 
-        newState[dataName] = _.sortBy(newItems, "sequence")
         sortNode.sortable("cancel");
-        this.setState(newState);
+        this.setState({fields: _.sortBy(fields, "sequence")});
+        this.updateDB("sequence")
+    },
+    updateDB(fieldname) {
+        var data = {"fieldname": fieldname}
+
+        data.data = _.map(this.state.fields, (field) => {
+            return [field._id, field[fieldname]]
+            })
+
+        retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
+            .done(function(content){
+                console.log("worked!", arguments)
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
     },
     loadData() {
         retryAjax({}, {api: "/getalldata", type: "get"})
-            .done(function(content){
-                this.setState(content) // {data: [headers]}
+            .done(function(content) {
+                content.redfin = _.find(content.fields, (f) => {return f.redfin == "_id"})._id;
+                this.setState(content) // {fields: [{field info}]}
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
             }.bind(this))
     },
     getInitialState() {
-        return {data: {}}
+        return {fields: {}, redfin: null}
     },
     componentDidMount() {
         this.loadData()
     },
     render() {
-        var houseIds = _.find(this.state.data, function(h) {return h.redfin = "_id"}),
-            houses = "";
+        var houses = "",
+            fields;
 
-        if (houseIds) {
-            houses = houseIds.data.map(function(id, row) {
-                    return (<House key={id} data={this.state.data} row={row} />)
-                }.bind(this));
+        if (this.state.redfin !== null) {
+            fields = this.state.fields;
+            houses = _.map(fields[this.state.redfin].data, function(redfinId, seqNo) { // for each house
+                var data = _.map(fields, (field) => {return field.data[seqNo]});
+                return (<House key={redfinId} data={data} fields={fields}/> )
+            }.bind(this));
         }
 
         return (
             <Grid fluid={true}>
-                <Header data={this.state.data} createSortable={this.createSortable}/>
+                <Header fields={this.state.fields} createSortable={this.createSortable}/>
                 {houses}
             </Grid>
         )

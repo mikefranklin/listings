@@ -27,14 +27,14 @@ function retryAjax(params, options) {
 var Header = React.createClass({
     displayName: "Header",
     getInitialState: function getInitialState() {
-        return { headers: {} };
+        return { fields: {} };
     },
     componentDidMount: function componentDidMount() {
-        this.props.createSortable(this, "data");
+        this.props.createSortable(this);
     },
     render: function render() {
-        var items = _.map(this.props.data, function (header) {
-            return React.createElement(HeaderItem, { key: header._id, data: header });
+        var items = _.map(this.props.fields, function (field) {
+            return React.createElement(HeaderItem, { key: field._id, field: field });
         });
         return React.createElement(
             Row,
@@ -47,23 +47,20 @@ var Header = React.createClass({
 var HeaderItem = React.createClass({
     displayName: "HeaderItem",
     getInitialState: function getInitialState() {
-        return { data: {} };
+        return { field: {} };
     },
-    handleClick: function handleClick() {
-        console.log(this);
-    },
+    handleClick: function handleClick() {},
     render: function render() {
-        //data-position={data.position}
-        var data = this.props.data;
+        var field = this.props.field;
         return React.createElement(
             Col,
-            { md: 2, "data-position": data.sequence, "data-id": data._id, className: "item" },
+            { md: 2, "data-position": field.sequence, "data-id": field._id, className: "item" },
             React.createElement(
                 "div",
                 { className: "btn-xsmall move", bsSize: "xsmall" },
                 React.createElement("i", { className: "fa fa-bars" })
             ),
-            React.createElement(FieldEditor, { data: data })
+            React.createElement(FieldEditor, { field: field })
         );
     }
 });
@@ -71,12 +68,14 @@ var HeaderItem = React.createClass({
 var House = React.createClass({
     displayName: "House",
     getInitialState: function getInitialState() {
-        return { data: {}, row: 0 };
+        return { data: {}, fields: {} };
     },
     render: function render() {
-        var items = _.map(this.props.data, function (header, index) {
-            var value = header.data[index];
-            return React.createElement(HouseItem, { key: header._id + ":" + index, name: header.fieldname, value: value, header: header });
+        var _this = this;
+
+        var items = _.map(this.props.fields, function (field, index) {
+            return React.createElement(HouseItem, { key: field._id, name: field.fieldname,
+                value: _this.props.data[index], field: field });
         });
         return React.createElement(
             Row,
@@ -107,13 +106,13 @@ var HouseItem = React.createClass({
         return (this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value);
     },
     getInitialState: function getInitialState() {
-        return { name: "", value: "", header: {} };
+        return { name: "", value: "", field: {} };
     },
     render: function render() {
         return React.createElement(
             Col,
             { md: 2, className: this.props.name, style: { overflow: "hidden", height: 20 } },
-            this.formatter(this.props.value, this.header)
+            this.formatter(this.props.value, this.props.field)
         );
     }
 });
@@ -139,31 +138,31 @@ var StyleButton = React.createClass({
 var FieldEditor = React.createClass({
     displayName: "FieldEditor",
     getInitialState: function getInitialState() {
-        return { showOverlay: false, data: {} };
+        return { showOverlay: false, field: {} };
     },
     toggle: function toggle() {
         this.setState({ showOverlay: !this.state.showOverlay });
     },
     render: function render() {
-        var _this = this;
+        var _this2 = this;
 
-        var data = this.props.data;
+        var field = this.props.field;
         return React.createElement(
             "div",
-            { style: { position: 'relative', float: 'left' } },
+            { className: "field-editor-container" },
             React.createElement(
                 Button,
                 { ref: "target", onClick: this.toggle, bsSize: "xsmall" },
-                data.text
+                field.text
             ),
             React.createElement(
                 Overlay,
                 { show: this.state.showOverlay, onHide: function onHide() {
-                        return _this.toggle;
+                        return _this2.toggle;
                     },
                     placement: "bottom", container: this, className: "field-editor",
                     target: function target() {
-                        return ReactDOM.findDOMNode(_this.refs.target);
+                        return ReactDOM.findDOMNode(_this2.refs.target);
                     } },
                 React.createElement(
                     "div",
@@ -171,8 +170,8 @@ var FieldEditor = React.createClass({
                     React.createElement(
                         ButtonGroup,
                         null,
-                        React.createElement(StyleButton, { on: data.hide, text: "Hide", onStyle: "danger" }),
-                        React.createElement(StyleButton, { on: !data.hide, text: "Show", onStyle: "success" })
+                        React.createElement(StyleButton, { on: field.hide, text: "Hide", onStyle: "danger" }),
+                        React.createElement(StyleButton, { on: !field.hide, text: "Show", onStyle: "success" })
                     )
                 )
             )
@@ -182,59 +181,77 @@ var FieldEditor = React.createClass({
 
 var App = React.createClass({
     displayName: "App",
-    createSortable: function createSortable(ref, dataName) {
+    createSortable: function createSortable(ref) {
         var sortNode = $(ReactDOM.findDOMNode(ref));
         sortNode = sortNode.sortable({ // handle, placeholder(classname)
             cursor: "move",
             items: '.item',
             handle: ".move",
-            update: _.bind(this.handleSortableUpdate, null, sortNode, dataName)
+            update: _.bind(this.handleSortableUpdate, null, sortNode)
         });
     },
-    handleSortableUpdate: function handleSortableUpdate(sortNode, dataName) {
+    handleSortableUpdate: function handleSortableUpdate(sortNode) {
         var ids = sortNode.sortable("toArray", { attribute: "data-id" }),
-            newItems = _.clone(this.state[dataName], true),
-            newState = {};
+            fields = _.clone(this.state.fields, true);
 
         ids.forEach(function (id, index) {
-            _.find(newItems, function (item) {
+            _.find(fields, function (item) {
                 return item._id == id;
             }).sequence = index;
         });
 
-        newState[dataName] = _.sortBy(newItems, "sequence");
         sortNode.sortable("cancel");
-        this.setState(newState);
+        this.setState({ fields: _.sortBy(fields, "sequence") });
+        this.updateDB("sequence");
+    },
+    updateDB: function updateDB(fieldname) {
+        var data = { "fieldname": fieldname };
+
+        data.data = _.map(this.state.fields, function (field) {
+            return [field._id, field[fieldname]];
+        });
+
+        retryAjax(JSON.stringify(data), { api: "/saveheaderdata", type: "post" }).done((function (content) {
+            console.log("worked!", arguments);
+        }).bind(this)).fail((function () {
+            console.log(arguments);
+        }).bind(this));
     },
     loadData: function loadData() {
         retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
-            this.setState(content); // {data: [headers]}
+            content.redfin = _.find(content.fields, function (f) {
+                return f.redfin == "_id";
+            })._id;
+            this.setState(content); // {fields: [{field info}]}
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
     },
     getInitialState: function getInitialState() {
-        return { data: {} };
+        return { fields: {}, redfin: null };
     },
     componentDidMount: function componentDidMount() {
         this.loadData();
     },
     render: function render() {
-        var houseIds = _.find(this.state.data, function (h) {
-            return h.redfin = "_id";
-        }),
-            houses = "";
+        var houses = "",
+            fields;
 
-        if (houseIds) {
-            houses = houseIds.data.map((function (id, row) {
-                return React.createElement(House, { key: id, data: this.state.data, row: row });
+        if (this.state.redfin !== null) {
+            fields = this.state.fields;
+            houses = _.map(fields[this.state.redfin].data, (function (redfinId, seqNo) {
+                // for each house
+                var data = _.map(fields, function (field) {
+                    return field.data[seqNo];
+                });
+                return React.createElement(House, { key: redfinId, data: data, fields: fields });
             }).bind(this));
         }
 
         return React.createElement(
             Grid,
             { fluid: true },
-            React.createElement(Header, { data: this.state.data, createSortable: this.createSortable }),
+            React.createElement(Header, { fields: this.state.fields, createSortable: this.createSortable }),
             houses
         );
     }
