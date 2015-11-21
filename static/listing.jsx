@@ -23,33 +23,35 @@ function retryAjax(params, options) {
 
 var Header = React.createClass({
     getInitialState() {
-        return {fields: {}}
+        return {fields: {}, hideField: {}}
     },
     componentDidMount() {
         this.props.createSortable(this)
     },
     render() {
-        var items = _.map(this.props.fields, (field) => {
-                            return (<HeaderItem key={field._id} field={field}/>)
-                        })
+        var items = _.chain(this.props.fields)
+                        .filter((field) => { return field.show })
+                        .map((field) => {
+                            return (<HeaderItem key={field._id} field={field} hideField={this.props.hideField}/>)
+                        }).value()
+
         return (<Row className="header">{items}</Row>);
     }
 })
 
 var HeaderItem = React.createClass({
     getInitialState() {
-        return {field: {}}
-    },
-    handleClick() {
+        return {field: {}, hideField: {}}
     },
     render() {
-        var field = this.props.field
+        var field = this.props.field,
+            hf = this.props.hideField ? _.bind(this.props.hideField, this, field._id) : {}
         return (
             <Col md={2} data-position={field.sequence} data-id={field._id} className="item">
                 <div className="btn-xsmall move" bsSize="xsmall">
                     <i className="fa fa-bars"></i>
                 </div>
-                <FieldEditor field={field}/>
+                <FieldEditor field={field} hideField={hf}/>
             </Col>
         )
     }
@@ -93,21 +95,9 @@ var HouseItem = React.createClass({
     }
 });
 
-var StyleButton = React.createClass({
-    getInitialState() {
-        return {on: false, text: "", onStyle: "default"}
-    },
-    render() {
-        return (this.props.on
-            ? <Button bsStyle={this.props.onStyle} bsSize="xsmall" active>{this.props.text}</Button>
-            : <Button bsStyle="default" bsSize="xsmall">{this.props.text}</Button>
-        )
-    }
-})
-
 var FieldEditor = React.createClass({
     getInitialState() {
-        return { showOverlay: false, field: {}};
+        return { showOverlay: false, field: {}, hideField: {}};
     },
     toggle() {
         this.setState({ showOverlay: !this.state.showOverlay });
@@ -119,15 +109,11 @@ var FieldEditor = React.createClass({
                 <Button ref="target" onClick={this.toggle} bsSize="xsmall">
                     {field.text}
                 </Button>
-
                 <Overlay show={this.state.showOverlay}  onHide={() => this.toggle}
                     placement="bottom" container={this} className="field-editor"
                     target={() => ReactDOM.findDOMNode(this.refs.target)}>
                     <div className="field-editor">
-                        <ButtonGroup>
-                            <StyleButton on={field.hide} text="Hide" onStyle="danger" />
-                            <StyleButton on={!field.hide} text="Show" onStyle="success" />
-                        </ButtonGroup>
+                        <Button bsSize="xsmall" onClick={this.props.hideField}>Hide</Button>
                     </div>
                 </Overlay>
           </div>
@@ -188,6 +174,14 @@ var App = React.createClass({
     componentDidMount() {
         this.loadData()
     },
+    hideField(fieldId) {
+        var fields = _.clone(this.state.fields),
+            index = _.findIndex(fields, (f) => {return f._id == fieldId});
+
+        fields[index].show = false;
+        this.setState(fields)
+        // file data!
+    },
     render() {
         var houses = "",
             fields;
@@ -195,14 +189,16 @@ var App = React.createClass({
         if (this.state.redfin !== null) {
             fields = this.state.fields;
             houses = _.map(fields[this.state.redfin].data, function(redfinId, seqNo) { // for each house
-                var data = _.map(fields, (field) => {return field.data[seqNo]});
+                var data = _.chain(fields)
+                                .filter((field) => { return field.show })
+                                .map((field) => {return field.data[seqNo]})
+                                .value()
                 return (<House key={redfinId} data={data} fields={fields}/> )
             }.bind(this));
         }
-
         return (
             <Grid fluid={true}>
-                <Header fields={this.state.fields} createSortable={this.createSortable}/>
+                <Header fields={this.state.fields} createSortable={this.createSortable} hideField={this.hideField}/>
                 {houses}
             </Grid>
         )

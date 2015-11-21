@@ -87,13 +87,11 @@ def update_and_retrieve_headers(listings):
 @app.route("/saveheaderdata", methods=["PUT", "POST"])
 def save_header_data():
     data = request.get_json(force=True)  # fieldname, data=[[_id, value]...
+    update = lambda value: {"_default." + data["fieldname"]: value}
 
     bulk = mongo.db.headers.initialize_unordered_bulk_op()
     for _id, value in data["data"]:
-        print(_id, data["fieldname"], value)
-        # https://groups.google.com/forum/?hl=en#!msg/mongodb-user/AuU6eWdBMd8/ylzvQe83PVgJ
-        # > db.headers.find({_id: 0, "_default.show": true })
-        # bulk.find({'_id': _id}).update({'$set': {"_default": {data["fieldname"]: value}}})
+        bulk.find({'_id': _id}).update({'$set': update(value)})
 
     return json.dumps(bulk.execute())
 

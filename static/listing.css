@@ -25,6 +25,7 @@
 .field-editor-container {
   position: relative;
   float: left;
+  width: 200px;
 }
 
 .field-editor {
