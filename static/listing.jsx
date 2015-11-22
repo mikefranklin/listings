@@ -29,12 +29,9 @@ var Header = React.createClass({
         this.props.createSortable(this)
     },
     render() {
-        var items = _.chain(this.props.fields)
-                        .filter((field) => { return field.show })
-                        .map((field) => {
+        var items = _.map(this.props.fields, (field) => {
                             return (<HeaderItem key={field._id} field={field} hideField={this.props.hideField}/>)
-                        }).value()
-
+                        })
         return (<Row className="header">{items}</Row>);
     }
 })
@@ -59,13 +56,13 @@ var HeaderItem = React.createClass({
 
 var House = React.createClass({
     getInitialState() {
-        return {data: {}, fields: {}};
+        return {listing: {}, fields: {}};
     },
     render() {
-        var items = _.map(this.props.fields, (field, index) => {
+        var items = _.map(this.props.fields, (field) => {
             return (
                 <HouseItem key={field._id} name={field.fieldname}
-                    value={this.props.data[index]} field = {field}/>
+                    value={this.props.listing[field._id]} field = {field}/>
             )
         })
         return (<Row className="house">{items}</Row>);
@@ -143,12 +140,15 @@ var App = React.createClass({
         this.setState({fields: _.sortBy(fields, "sequence")});
         this.updateDB("sequence")
     },
-    updateDB(fieldname) {
+    updateDB(fieldname, field) {
         var data = {"fieldname": fieldname}
 
-        data.data = _.map(this.state.fields, (field) => {
-            return [field._id, field[fieldname]]
-            })
+        if (field) data.data = [[field._id, field[fieldname]]]
+        else {
+            data.data = _.map(this.state.fields, (field) => {
+                return [field._id, field[fieldname]]
+                })
+        }
 
         retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
             .done(function(content){
@@ -162,14 +162,14 @@ var App = React.createClass({
         retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) {
                 content.redfin = _.find(content.fields, (f) => {return f.redfin == "_id"})._id;
-                this.setState(content) // {fields: [{field info}]}
+                this.setState(content) // {fields: [{field info}], listsings: [[data, ...], ...]}
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
             }.bind(this))
     },
     getInitialState() {
-        return {fields: {}, redfin: null}
+        return {fields: {}, listings: [], redfin: null}
     },
     componentDidMount() {
         this.loadData()
@@ -179,26 +179,21 @@ var App = React.createClass({
             index = _.findIndex(fields, (f) => {return f._id == fieldId});
 
         fields[index].show = false;
+        this.updateDB("show", fields[index])
         this.setState(fields)
-        // file data!
     },
     render() {
         var houses = "",
-            fields;
-
-        if (this.state.redfin !== null) {
-            fields = this.state.fields;
-            houses = _.map(fields[this.state.redfin].data, function(redfinId, seqNo) { // for each house
-                var data = _.chain(fields)
-                                .filter((field) => { return field.show })
-                                .map((field) => {return field.data[seqNo]})
-                                .value()
-                return (<House key={redfinId} data={data} fields={fields}/> )
+            redfinId = this.state.redfin,
+            displayable = _.filter(this.state.fields, (field) => {return field.show})
+        if (displayable.length) {
+            houses = _.map(this.state.listings, function(listing) {
+                return (<House key={listing[redfinId]} listing={listing} fields={displayable}/> )
             }.bind(this));
         }
         return (
             <Grid fluid={true}>
-                <Header fields={this.state.fields} createSortable={this.createSortable} hideField={this.hideField}/>
+                <Header fields={displayable} createSortable={this.createSortable} hideField={this.hideField}/>
                 {houses}
             </Grid>
         )

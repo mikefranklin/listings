@@ -35,12 +35,9 @@ var Header = React.createClass({
     render: function render() {
         var _this = this;
 
-        var items = _.chain(this.props.fields).filter(function (field) {
-            return field.show;
-        }).map(function (field) {
+        var items = _.map(this.props.fields, function (field) {
             return React.createElement(HeaderItem, { key: field._id, field: field, hideField: _this.props.hideField });
-        }).value();
-
+        });
         return React.createElement(
             Row,
             { className: "header" },
@@ -73,14 +70,14 @@ var HeaderItem = React.createClass({
 var House = React.createClass({
     displayName: "House",
     getInitialState: function getInitialState() {
-        return { data: {}, fields: {} };
+        return { listing: {}, fields: {} };
     },
     render: function render() {
         var _this2 = this;
 
-        var items = _.map(this.props.fields, function (field, index) {
+        var items = _.map(this.props.fields, function (field) {
             return React.createElement(HouseItem, { key: field._id, name: field.fieldname,
-                value: _this2.props.data[index], field: field });
+                value: _this2.props.listing[field._id], field: field });
         });
         return React.createElement(
             Row,
@@ -190,12 +187,14 @@ var App = React.createClass({
         this.setState({ fields: _.sortBy(fields, "sequence") });
         this.updateDB("sequence");
     },
-    updateDB: function updateDB(fieldname) {
+    updateDB: function updateDB(fieldname, field) {
         var data = { "fieldname": fieldname };
 
-        data.data = _.map(this.state.fields, function (field) {
-            return [field._id, field[fieldname]];
-        });
+        if (field) data.data = [[field._id, field[fieldname]]];else {
+            data.data = _.map(this.state.fields, function (field) {
+                return [field._id, field[fieldname]];
+            });
+        }
 
         retryAjax(JSON.stringify(data), { api: "/saveheaderdata", type: "post" }).done((function (content) {
             console.log("worked!", arguments);
@@ -208,13 +207,13 @@ var App = React.createClass({
             content.redfin = _.find(content.fields, function (f) {
                 return f.redfin == "_id";
             })._id;
-            this.setState(content); // {fields: [{field info}]}
+            this.setState(content); // {fields: [{field info}], listsings: [[data, ...], ...]}
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
     },
     getInitialState: function getInitialState() {
-        return { fields: {}, redfin: null };
+        return { fields: {}, listings: [], redfin: null };
     },
     componentDidMount: function componentDidMount() {
         this.loadData();
@@ -226,29 +225,24 @@ var App = React.createClass({
         });
 
         fields[index].show = false;
+        this.updateDB("show", fields[index]);
         this.setState(fields);
-        // file data!
     },
     render: function render() {
         var houses = "",
-            fields;
-
-        if (this.state.redfin !== null) {
-            fields = this.state.fields;
-            houses = _.map(fields[this.state.redfin].data, (function (redfinId, seqNo) {
-                // for each house
-                var data = _.chain(fields).filter(function (field) {
-                    return field.show;
-                }).map(function (field) {
-                    return field.data[seqNo];
-                }).value();
-                return React.createElement(House, { key: redfinId, data: data, fields: fields });
+            redfinId = this.state.redfin,
+            displayable = _.filter(this.state.fields, function (field) {
+            return field.show;
+        });
+        if (displayable.length) {
+            houses = _.map(this.state.listings, (function (listing) {
+                return React.createElement(House, { key: listing[redfinId], listing: listing, fields: displayable });
             }).bind(this));
         }
         return React.createElement(
             Grid,
             { fluid: true },
-            React.createElement(Header, { fields: this.state.fields, createSortable: this.createSortable, hideField: this.hideField }),
+            React.createElement(Header, { fields: displayable, createSortable: this.createSortable, hideField: this.hideField }),
             houses
         );
     }

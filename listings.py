@@ -46,20 +46,24 @@ def setup():
 def get_data():
     " retrieve all listings, return header info + data"
 
-    listings = list(mongo.db.listings.find())
-    headers = update_and_retrieve_headers(listings)
-    merge_listings_with_headers(listings, headers)
+    raw_listings = list(mongo.db.listings.find())
+    headers = update_and_retrieve_headers(raw_listings)
+    # merge_listings_with_headers(listings, headers)
+    listings = condense_listings(raw_listings, headers)
 
-    return json.dumps({"fields": headers}, default=json_util.default)
+    return json.dumps({"fields": headers, "listings": list(listings)},
+                      default=json_util.default)
 
 
-def merge_listings_with_headers(listings, headers):
-    " add array of data to each header "
+def condense_listings(raw_listings, headers):
+    """ convert from name: value to array of values indexed by fieldId """
 
-    # ? add encodings for listifyable data (e.g. city, location, realtor)
-
-    for header in headers:
-        header["data"] = [listing.get(header["redfin"]) for listing in listings]
+    maxId = max(header["_id"] for header in headers) + 1
+    for listing in raw_listings:
+        entry = [""] * maxId
+        for header in headers:
+            entry[header["_id"]] = listing[header["redfin"]]
+        yield(entry)
 
 
 def update_and_retrieve_headers(listings):
