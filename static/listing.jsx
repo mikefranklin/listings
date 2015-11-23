@@ -1,5 +1,10 @@
 "use babel";
 
+var signaller = {
+  headerUpdated: new signals.Signal(),
+  moveToggled: new signals.Signal(),
+};
+
 function retryAjax(params, options) {
     var opts = _.extend({base: "", api: "*required*", dataType: "json",
                         init: "", delay: 0, type: "post"}, options),
@@ -23,14 +28,14 @@ function retryAjax(params, options) {
 
 var Header = React.createClass({
     getInitialState() {
-        return {fields: {}, hideField: {}}
+        return {fields: {}, canMove: false}
     },
     componentDidMount() {
         this.props.createSortable(this)
     },
     render() {
         var items = _.map(this.props.fields, (field) => {
-                            return (<HeaderItem key={field._id} field={field} hideField={this.props.hideField}/>)
+                            return (<HeaderItem key={field._id} field={field} canMove={this.props.canMove}/>)
                         })
         return (<Row className="header">{items}</Row>);
     }
@@ -38,17 +43,21 @@ var Header = React.createClass({
 
 var HeaderItem = React.createClass({
     getInitialState() {
-        return {field: {}, hideField: {}}
+        return {field: {}}
     },
     render() {
         var field = this.props.field,
-            hf = this.props.hideField ? _.bind(this.props.hideField, this, field._id) : {}
+            cols = this.props.field.columns ? this.props.field.columns : 2,
+            move = !this.props.canMove
+                ? ""
+                : (<div className="btn-xsmall move" bsSize="xsmall">
+                        <i className="fa fa-bars"></i>
+                    </div>);
+
         return (
-            <Col md={2} data-position={field.sequence} data-id={field._id} className="item">
-                <div className="btn-xsmall move" bsSize="xsmall">
-                    <i className="fa fa-bars"></i>
-                </div>
-                <FieldEditor field={field} hideField={hf}/>
+            <Col md={cols} data-position={field.sequence} data-id={field._id} className="item">
+                {move}
+                <FieldEditor field={field}/>
             </Col>
         )
     }
@@ -84,8 +93,9 @@ var HouseItem = React.createClass({
         return {name: "", value: "", field: {}};
     },
     render() {
+        var cols = this.props.field.columns ? this.props.field.columns : 2;
         return (
-            <Col md={2} className={this.props.name} style={{overflow: "hidden", height: 20}} >
+            <Col md={cols} className={this.props.name} style={{overflow: "hidden", height: 20}} >
                 {this.formatter(this.props.value, this.props.field)}
             </Col>
         );
@@ -99,24 +109,75 @@ var FieldEditor = React.createClass({
     toggle() {
         this.setState({ showOverlay: !this.state.showOverlay });
     },
+    signal(name) {
+        signaller[name].dispatch(..._.toArray(arguments).slice(1))
+    },
     render() {
-        var field = this.props.field;
+        var field = this.props.field,
+            fieldId = field._id,
+            click = [this.signal, this, "headerUpdated", fieldId];
         return (
             <div className="field-editor-container">
                 <Button ref="target" onClick={this.toggle} bsSize="xsmall">
                     {field.text}
                 </Button>
-                <Overlay show={this.state.showOverlay}  onHide={() => this.toggle}
-                    placement="bottom" container={this} className="field-editor"
-                    target={() => ReactDOM.findDOMNode(this.refs.target)}>
+                <Overlay show={this.state.showOverlay} onHide={() => this.toggle} placement="bottom" rootClose
+                    container={this} className="field-editor" target={() => ReactDOM.findDOMNode(this.refs.target)}>
                     <div className="field-editor">
-                        <Button bsSize="xsmall" onClick={this.props.hideField}>Hide</Button>
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <td></td>
+                                    <td>
+                                        <Button bsSize="small" onClick={_.bind(...click, 'show', false)}>
+                                            Hide
+                                        </Button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Columns</td>
+                                    <td>
+                                        <Button bsSize="small" onClick={_.bind(...click, "columns", 1)}>One</Button>
+                                        <Button bsSize="small" onClick={_.bind(...click, "columns", 2)}>Two</Button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </Overlay>
           </div>
         );
     }
 });
+
+var Control = React.createClass({
+    getInitialState() {
+        return {hidden: {}}
+    },
+    signal(name) {
+        signaller[name].dispatch(..._.toArray(arguments).slice(1))
+    },
+    render() {
+        var hidden = _.map(this.props.hidden, (field, index) => {
+                var click = _.bind(this.signal, this, "headerUpdated", field._id, "show", true)
+                return <MenuItem key={field._id} onClick={click}>{field.text}</MenuItem>
+            }),
+            style = this.props.canMove ? "success" : "default"
+        return (
+            <Row className="control">
+                <Col md={1} mdOffset={10}>
+                    <Button bsStyle={style} onClick={_.bind(this.signal, this, "moveToggled")}>
+                        Toggle move
+                    </Button>
+                </Col>
+                <Col md={1}>
+                    <DropdownButton title="Unhide" id="unhide" pullRight>
+                    {hidden}
+                    </DropdownButton>
+                </Col>
+            </Row>);
+    }
+})
 
 var App = React.createClass({
     createSortable(ref) {
@@ -152,7 +213,7 @@ var App = React.createClass({
 
         retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
             .done(function(content){
-                console.log("worked!", arguments)
+                console.log("worked!", data, arguments)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
@@ -168,24 +229,29 @@ var App = React.createClass({
                 console.log(arguments)
             }.bind(this))
     },
+    headerUpdated(fieldId, headerName, value, ...args) { // hideField, setWidth
+        var fields = _.clone(this.state.fields),
+            index = _.findIndex(fields, (f) => {return f._id == fieldId});
+
+        fields[index][headerName] = value
+        this.updateDB(headerName, fields[index])
+        this.setState(fields)
+    },
     getInitialState() {
-        return {fields: {}, listings: [], redfin: null}
+        signaller.headerUpdated.add(this.headerUpdated);
+        signaller.moveToggled.add(this.moveToggled)
+        return {fields: {}, listings: [], redfin: null, canMove: false}
+    },
+    moveToggled() {
+        this.setState({canMove: !this.state.canMove })
     },
     componentDidMount() {
         this.loadData()
     },
-    hideField(fieldId) {
-        var fields = _.clone(this.state.fields),
-            index = _.findIndex(fields, (f) => {return f._id == fieldId});
-
-        fields[index].show = false;
-        this.updateDB("show", fields[index])
-        this.setState(fields)
-    },
     render() {
         var houses = "",
             redfinId = this.state.redfin,
-            displayable = _.filter(this.state.fields, (field) => {return field.show})
+            [displayable, hidden] = _.partition(this.state.fields, (field) => {return field.show})
         if (displayable.length) {
             houses = _.map(this.state.listings, function(listing) {
                 return (<House key={listing[redfinId]} listing={listing} fields={displayable}/> )
@@ -193,14 +259,15 @@ var App = React.createClass({
         }
         return (
             <Grid fluid={true}>
-                <Header fields={displayable} createSortable={this.createSortable} hideField={this.hideField}/>
+                <Header fields={displayable} createSortable={this.createSortable} canMove={this.state.canMove}/>
+                <Control hidden={hidden} canMove={this.state.canMove}/>
                 {houses}
             </Grid>
         )
     }
 })
 
-_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay".split(","),
+_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","),
     function(m) {window[m] = ReactBootstrap[m]})
 
 ReactDOM.render(

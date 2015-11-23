@@ -1,7 +1,16 @@
 "use strict";
 "use babel";
 
+var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
 function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
+
+var signaller = {
+    headerUpdated: new signals.Signal(),
+    moveToggled: new signals.Signal()
+};
 
 function retryAjax(params, options) {
     var opts = _.extend({ base: "", api: "*required*", dataType: "json",
@@ -27,7 +36,7 @@ function retryAjax(params, options) {
 var Header = React.createClass({
     displayName: "Header",
     getInitialState: function getInitialState() {
-        return { fields: {}, hideField: {} };
+        return { fields: {}, canMove: false };
     },
     componentDidMount: function componentDidMount() {
         this.props.createSortable(this);
@@ -36,7 +45,7 @@ var Header = React.createClass({
         var _this = this;
 
         var items = _.map(this.props.fields, function (field) {
-            return React.createElement(HeaderItem, { key: field._id, field: field, hideField: _this.props.hideField });
+            return React.createElement(HeaderItem, { key: field._id, field: field, canMove: _this.props.canMove });
         });
         return React.createElement(
             Row,
@@ -49,20 +58,22 @@ var Header = React.createClass({
 var HeaderItem = React.createClass({
     displayName: "HeaderItem",
     getInitialState: function getInitialState() {
-        return { field: {}, hideField: {} };
+        return { field: {} };
     },
     render: function render() {
         var field = this.props.field,
-            hf = this.props.hideField ? _.bind(this.props.hideField, this, field._id) : {};
+            cols = this.props.field.columns ? this.props.field.columns : 2,
+            move = !this.props.canMove ? "" : React.createElement(
+            "div",
+            { className: "btn-xsmall move", bsSize: "xsmall" },
+            React.createElement("i", { className: "fa fa-bars" })
+        );
+
         return React.createElement(
             Col,
-            { md: 2, "data-position": field.sequence, "data-id": field._id, className: "item" },
-            React.createElement(
-                "div",
-                { className: "btn-xsmall move", bsSize: "xsmall" },
-                React.createElement("i", { className: "fa fa-bars" })
-            ),
-            React.createElement(FieldEditor, { field: field, hideField: hf })
+            { md: cols, "data-position": field.sequence, "data-id": field._id, className: "item" },
+            move,
+            React.createElement(FieldEditor, { field: field })
         );
     }
 });
@@ -111,9 +122,10 @@ var HouseItem = React.createClass({
         return { name: "", value: "", field: {} };
     },
     render: function render() {
+        var cols = this.props.field.columns ? this.props.field.columns : 2;
         return React.createElement(
             Col,
-            { md: 2, className: this.props.name, style: { overflow: "hidden", height: 20 } },
+            { md: cols, className: this.props.name, style: { overflow: "hidden", height: 20 } },
             this.formatter(this.props.value, this.props.field)
         );
     }
@@ -127,10 +139,20 @@ var FieldEditor = React.createClass({
     toggle: function toggle() {
         this.setState({ showOverlay: !this.state.showOverlay });
     },
-    render: function render() {
-        var _this3 = this;
+    signal: function signal(name) {
+        var _signaller$name;
 
-        var field = this.props.field;
+        (_signaller$name = signaller[name]).dispatch.apply(_signaller$name, _toConsumableArray(_.toArray(arguments).slice(1)));
+    },
+    render: function render() {
+        var _this3 = this,
+            _ref,
+            _ref2,
+            _ref3;
+
+        var field = this.props.field,
+            fieldId = field._id,
+            click = [this.signal, this, "headerUpdated", fieldId];
         return React.createElement(
             "div",
             { className: "field-editor-container" },
@@ -143,19 +165,105 @@ var FieldEditor = React.createClass({
                 Overlay,
                 { show: this.state.showOverlay, onHide: function onHide() {
                         return _this3.toggle;
-                    },
-                    placement: "bottom", container: this, className: "field-editor",
-                    target: function target() {
+                    }, placement: "bottom", rootClose: true,
+                    container: this, className: "field-editor", target: function target() {
                         return ReactDOM.findDOMNode(_this3.refs.target);
                     } },
                 React.createElement(
                     "div",
                     { className: "field-editor" },
                     React.createElement(
-                        Button,
-                        { bsSize: "xsmall", onClick: this.props.hideField },
-                        "Hide"
+                        "table",
+                        null,
+                        React.createElement(
+                            "tbody",
+                            null,
+                            React.createElement(
+                                "tr",
+                                null,
+                                React.createElement("td", null),
+                                React.createElement(
+                                    "td",
+                                    null,
+                                    React.createElement(
+                                        Button,
+                                        { bsSize: "small", onClick: (_ref = _).bind.apply(_ref, click.concat(['show', false])) },
+                                        "Hide"
+                                    )
+                                )
+                            ),
+                            React.createElement(
+                                "tr",
+                                null,
+                                React.createElement(
+                                    "td",
+                                    null,
+                                    "Columns"
+                                ),
+                                React.createElement(
+                                    "td",
+                                    null,
+                                    React.createElement(
+                                        Button,
+                                        { bsSize: "small", onClick: (_ref2 = _).bind.apply(_ref2, click.concat(["columns", 1])) },
+                                        "One"
+                                    ),
+                                    React.createElement(
+                                        Button,
+                                        { bsSize: "small", onClick: (_ref3 = _).bind.apply(_ref3, click.concat(["columns", 2])) },
+                                        "Two"
+                                    )
+                                )
+                            )
+                        )
                     )
+                )
+            )
+        );
+    }
+});
+
+var Control = React.createClass({
+    displayName: "Control",
+    getInitialState: function getInitialState() {
+        return { hidden: {} };
+    },
+    signal: function signal(name) {
+        var _signaller$name2;
+
+        (_signaller$name2 = signaller[name]).dispatch.apply(_signaller$name2, _toConsumableArray(_.toArray(arguments).slice(1)));
+    },
+    render: function render() {
+        var _this4 = this;
+
+        var hidden = _.map(this.props.hidden, function (field, index) {
+            var click = _.bind(_this4.signal, _this4, "headerUpdated", field._id, "show", true);
+            return React.createElement(
+                MenuItem,
+                { key: field._id, onClick: click },
+                field.text
+            );
+        }),
+            style = this.props.canMove ? "success" : "default";
+        return React.createElement(
+            Row,
+            { className: "control" },
+            React.createElement(
+                Col,
+                { md: 1, mdOffset: 10 },
+                React.createElement(
+                    Button,
+                    { bsStyle: style, onClick: _.bind(this.signal, this, "moveToggled") },
+                    "Toggle move"
+                )
+            ),
+            React.createElement(
+                Col,
+                { md: 1 },
+                React.createElement(
+                    DropdownButton,
+                    { title: "Unhide", id: "unhide", pullRight: true },
+                    hidden
                 )
             )
         );
@@ -197,7 +305,7 @@ var App = React.createClass({
         }
 
         retryAjax(JSON.stringify(data), { api: "/saveheaderdata", type: "post" }).done((function (content) {
-            console.log("worked!", arguments);
+            console.log("worked!", data, arguments);
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
@@ -212,28 +320,41 @@ var App = React.createClass({
             console.log(arguments);
         }).bind(this));
     },
-    getInitialState: function getInitialState() {
-        return { fields: {}, listings: [], redfin: null };
-    },
-    componentDidMount: function componentDidMount() {
-        this.loadData();
-    },
-    hideField: function hideField(fieldId) {
+    headerUpdated: function headerUpdated(fieldId, headerName, value) {
+        // hideField, setWidth
         var fields = _.clone(this.state.fields),
             index = _.findIndex(fields, function (f) {
             return f._id == fieldId;
         });
 
-        fields[index].show = false;
-        this.updateDB("show", fields[index]);
+        fields[index][headerName] = value;
+        this.updateDB(headerName, fields[index]);
         this.setState(fields);
     },
+    getInitialState: function getInitialState() {
+        signaller.headerUpdated.add(this.headerUpdated);
+        signaller.moveToggled.add(this.moveToggled);
+        return { fields: {}, listings: [], redfin: null, canMove: false };
+    },
+    moveToggled: function moveToggled() {
+        this.setState({ canMove: !this.state.canMove });
+    },
+    componentDidMount: function componentDidMount() {
+        this.loadData();
+    },
     render: function render() {
-        var houses = "",
-            redfinId = this.state.redfin,
-            displayable = _.filter(this.state.fields, function (field) {
+        var houses = "";
+        var redfinId = this.state.redfin;
+
+        var _$partition = _.partition(this.state.fields, function (field) {
             return field.show;
         });
+
+        var _$partition2 = _slicedToArray(_$partition, 2);
+
+        var displayable = _$partition2[0];
+        var hidden = _$partition2[1];
+
         if (displayable.length) {
             houses = _.map(this.state.listings, (function (listing) {
                 return React.createElement(House, { key: listing[redfinId], listing: listing, fields: displayable });
@@ -242,13 +363,14 @@ var App = React.createClass({
         return React.createElement(
             Grid,
             { fluid: true },
-            React.createElement(Header, { fields: displayable, createSortable: this.createSortable, hideField: this.hideField }),
+            React.createElement(Header, { fields: displayable, createSortable: this.createSortable, canMove: this.state.canMove }),
+            React.createElement(Control, { hidden: hidden, canMove: this.state.canMove }),
             houses
         );
     }
 });
 
-_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay".split(","), function (m) {
+_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","), function (m) {
     window[m] = ReactBootstrap[m];
 });
 
