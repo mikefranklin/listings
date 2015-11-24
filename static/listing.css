@@ -8,6 +8,7 @@
   text-align: left;
   padding: 5px;
   margin-bottom: 3px;
+  border: solid #eee 1px;
 }
 
 .header .move,
@@ -18,6 +19,7 @@
 
 .header .move {
   margin-top: 4px;
+  z-index: 3;
 }
 
 .house {
@@ -27,40 +29,22 @@
 }
 
 .control {
-  background-color: #eef
+  background-color: #eef;
+  padding: 2px 0;
 }
 
-.header div:hover .move,
-.header div:hover .opts {
+.header .edit:hover {
+  color: darkgreen;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.header div:hover .move {
   color: darkgreen;
   cursor: pointer
 }
 
-.field-editor-container {
-  position: relative;
-  width: 200px;
-}
-
-.field-editor {
-  position: absolute;
-  background-color: #EEE;
-  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
-  border: 1px solid #CCC;
-  border-radius: 3px;
-  margin-left: -5px;
-  margin-top: 5px;
-  padding: 10px;
-  z-index: 2;
-}
-
-.field-editor table td {
-  padding: 2px;
-}
-
-.btn-xsmall {
-  padding: 1px 5px;
-  font-size: 12px;
-  line-height: 1.5;
-  border-radius: 3px;
-  float: left;
+.titles,
+.values {
+  padding: 4px
 }

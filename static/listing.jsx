@@ -30,7 +30,7 @@ var Header = React.createClass({
     getInitialState() {
         return {fields: {}, canMove: false}
     },
-    componentDidMount() {
+    componentDidUpdate() {
         this.props.createSortable(this)
     },
     render() {
@@ -43,9 +43,12 @@ var Header = React.createClass({
 
 var HeaderItem = React.createClass({
     getInitialState() {
-        return {field: {}}
+        return {field: {}, showModal: false}
     },
-    render() {
+    openFieldEditor() {
+        this.setState({showModal: true})
+    },
+    render() { // <FieldEditor field={field}/>
         var field = this.props.field,
             cols = this.props.field.columns ? this.props.field.columns : 2,
             move = !this.props.canMove
@@ -57,7 +60,8 @@ var HeaderItem = React.createClass({
         return (
             <Col md={cols} data-position={field.sequence} data-id={field._id} className="item">
                 {move}
-                <FieldEditor field={field}/>
+                <div className="edit" onClick={this.openFieldEditor}>{field.text}</div>
+                <FieldEditor showModal={this.state.showModal} field={this.props.field}/>
             </Col>
         )
     }
@@ -98,54 +102,6 @@ var HouseItem = React.createClass({
             <Col md={cols} className={this.props.name} style={{overflow: "hidden", height: 20}} >
                 {this.formatter(this.props.value, this.props.field)}
             </Col>
-        );
-    }
-});
-
-var FieldEditor = React.createClass({
-    getInitialState() {
-        return { showOverlay: false, field: {}, hideField: {}};
-    },
-    toggle() {
-        this.setState({ showOverlay: !this.state.showOverlay });
-    },
-    signal(name) {
-        signaller[name].dispatch(..._.toArray(arguments).slice(1))
-    },
-    render() {
-        var field = this.props.field,
-            fieldId = field._id,
-            click = [this.signal, this, "headerUpdated", fieldId];
-        return (
-            <div className="field-editor-container">
-                <Button ref="target" onClick={this.toggle} bsSize="xsmall">
-                    {field.text}
-                </Button>
-                <Overlay show={this.state.showOverlay} onHide={() => this.toggle} placement="bottom" rootClose
-                    container={this} className="field-editor" target={() => ReactDOM.findDOMNode(this.refs.target)}>
-                    <div className="field-editor">
-                        <table>
-                            <tbody>
-                                <tr>
-                                    <td></td>
-                                    <td>
-                                        <Button bsSize="small" onClick={_.bind(...click, 'show', false)}>
-                                            Hide
-                                        </Button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Columns</td>
-                                    <td>
-                                        <Button bsSize="small" onClick={_.bind(...click, "columns", 1)}>One</Button>
-                                        <Button bsSize="small" onClick={_.bind(...click, "columns", 2)}>Two</Button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </Overlay>
-          </div>
         );
     }
 });
@@ -267,10 +223,75 @@ var App = React.createClass({
     }
 })
 
+var FieldEditor = React.createClass ({
+    getInitialState() {
+        return {showModal: false, field: {}}
+    },
+    close() {
+        this.setState({showModal: false});
+    },
+    componentWillReceiveProps(nextProps) {
+        this.setState(nextProps)
+    },
+    signal(name, close, ...args) {
+        if (close) this.close()
+        console.log(name, close, ...args)
+        //signaller[name].dispatch(...args)
+    },
+    render() {
+        var field = this.state.field,
+            fieldId = field._id,
+            updateClose = [this.signal, this, "headerUpdated", true, fieldId];
+        return (
+            <Modal show={this.state.showModal} onHide={this.close}>
+              <Modal.Header closeButton>
+                <Modal.Title>{field.text}</Modal.Title>
+              </Modal.Header>
+              <Modal.Body>
+                  <table>
+                      <tbody>
+                          <tr>
+                              <td className="title">Visibility</td>
+                              <td className="values">
+                                  <Button bsSize="small" onClick={_.bind(...updateClose, 'show', false)}>
+                                      Hide
+                                  </Button>
+                              </td>
+                          </tr>
+                          <tr>
+                              <td className="title">Columns</td>
+                              <td className="values">
+                                  <Button bsSize="small" onClick={_.bind(...updateClose, "columns", 1)}>One</Button>
+                                  <Button bsSize="small" onClick={_.bind(...updateClose, "columns", 2)}>Two</Button>
+                              </td>
+                          </tr>
+                          <tr>
+                            <td className="title">Text</td>
+                            <td className="values">
+                                <input type="text" style={{width: "100%"}}
+                                    onBlur={_.bind(...updateClose, "text", this.value)}/>
+                            </td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button onClick={this.close}>Close</Button>
+              </Modal.Footer>
+            </Modal>
+        )
+    }
+})
+
 _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","),
     function(m) {window[m] = ReactBootstrap[m]})
 
 ReactDOM.render(
   <App />,
   document.getElementById('content')
+);
+
+ReactDOM.render(
+    <FieldEditor/>,
+    document.getElementById("fieldeditor")
 );
