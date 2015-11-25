@@ -10,7 +10,8 @@ function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.const
 var signaller = {
     headerUpdated: new signals.Signal(),
     moveToggled: new signals.Signal(),
-    currentsSelected: new signals.Signal()
+    currentsSelected: new signals.Signal(),
+    newField: new signals.Signal()
 };
 
 function retryAjax(params, options) {
@@ -176,7 +177,16 @@ var Control = React.createClass({
             { className: "control" },
             React.createElement(
                 Col,
-                { md: 1, mdOffset: 9 },
+                { md: 1, mdOffset: 8 },
+                React.createElement(
+                    Button,
+                    { bsStyle: curStyle, onClick: _.bind(this.signal, this, "newField") },
+                    "New Field"
+                )
+            ),
+            React.createElement(
+                Col,
+                { md: 1 },
                 React.createElement(
                     Button,
                     { bsStyle: curStyle, onClick: _.bind(this.signal, this, "currentsSelected") },
@@ -266,10 +276,28 @@ var App = React.createClass({
         this.updateDB(headerName, fields[index]);
         this.setState(fields);
     },
+    addNewField: function addNewField() {
+        var len = this.state.fields.length;
+
+        this.state.fields.push(_.extend(_.clone(this.state.fields[0]), {
+            id: len,
+            redfin: "new_" + len,
+            sequence: len,
+            show: true,
+            text: "new_" + len
+        }));
+
+        _.each(this.state.listings, function (l) {
+            return l.push("");
+        });
+
+        console.log(this.state.fields, this.state.listings);
+    },
     getInitialState: function getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
         signaller.moveToggled.add(this.moveToggled);
         signaller.currentsSelected.add(this.currentsSelected);
+        signaller.newField.add(this.addNewField);
         return { fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false };
     },
     moveToggled: function moveToggled() {
@@ -281,8 +309,15 @@ var App = React.createClass({
     componentDidMount: function componentDidMount() {
         this.loadData();
     },
+    getFieldPos: function getFieldPos(name) {
+        return _.find(this.state.fields, function (f) {
+            return f.text == name;
+        })._id;
+    },
     render: function render() {
-        var houses = "";
+        var _this4 = this;
+
+        if (!this.state.listings.length) return false;
         var redfinId = this.state.redfin;
 
         var _$partition = _.partition(this.state.fields, function (field) {
@@ -293,26 +328,21 @@ var App = React.createClass({
 
         var displayable = _$partition2[0];
         var hidden = _$partition2[1];
-        var dtPos = (_.find(this.state.fields, function (f) {
-            return f.text == 'last_loaded';
-        }) || {})._id;
-        var stPos = (_.find(this.state.fields, function (f) {
-            return f.text == 'status';
-        }) || {})._id;
+        var dtPos = this.getFieldPos("last_loaded");
+        var stPos = this.getFieldPos("status");
         var maxDate = _.chain(this.state.listings).map(function (l) {
             return l[dtPos].$date;
         }).max().value();
-        var listings;
+        var houses = _.chain(this.state.listings).filter(function (l) {
+            return !_this4.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active";
+        }).sortBy(function (l) {
+            return _.map(displayable, function (f) {
+                return l[f._id];
+            }).join("$");
+        }).map((function (l) {
+            return React.createElement(House, { key: l[redfinId], listing: l, fields: displayable });
+        }).bind(this)).value();
 
-        if (displayable.length) {
-            listings = //this.state.listings
-            !this.state.currentsOnly ? this.state.listings : _.filter(this.state.listings, function (l) {
-                return l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active";
-            });
-            houses = _.map(listings, (function (listing) {
-                return React.createElement(House, { key: listing[redfinId], listing: listing, fields: displayable });
-            }).bind(this));
-        }
         return React.createElement(
             Grid,
             { fluid: true },

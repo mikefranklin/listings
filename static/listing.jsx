@@ -3,7 +3,8 @@
 var signaller = {
   headerUpdated: new signals.Signal(),
   moveToggled: new signals.Signal(),
-  currentsSelected: new signals.Signal()
+  currentsSelected: new signals.Signal(),
+  newField: new signals.Signal()
 };
 
 function retryAjax(params, options) {
@@ -73,7 +74,7 @@ var House = React.createClass({
         return {listing: {}, fields: {}};
     },
     render() {
-        var items = _.map(this.props.fields, (field) => {
+        var items = _.map(this.props.fields, field => {
             return (
                 <HouseItem key={field._id} name={field.fieldname}
                     value={this.props.listing[field._id]} field = {field}/>
@@ -128,7 +129,12 @@ var Control = React.createClass({
             curStyle = this.props.currentsOnly ? "success" : "default";
         return (
             <Row className="control">
-                <Col md={1} mdOffset={9}>
+                <Col md={1} mdOffset={8}>
+                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "newField")}>
+                        New Field
+                    </Button>
+                </Col>
+                <Col md={1}>
                     <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentsSelected")}>
                         Current Active
                     </Button>
@@ -205,10 +211,28 @@ var App = React.createClass({
         this.updateDB(headerName, fields[index])
         this.setState(fields)
     },
+    addNewField() {
+        var len = this.state.fields.length;
+
+        this.state.fields.push(
+            _.extend(_.clone(this.state.fields[0]), {
+                id: len,
+                redfin: "new_" + len,
+                sequence: len,
+                show: true,
+                text: "new_" + len
+            })
+        )
+
+        _.each(this.state.listings, l => l.push(""))
+
+        console.log(this.state.fields, this.state.listings)
+    },
     getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
         signaller.moveToggled.add(this.moveToggled)
         signaller.currentsSelected.add(this.currentsSelected)
+        signaller.newField.add(this.addNewField)
         return {fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false}
     },
     moveToggled() {
@@ -220,23 +244,24 @@ var App = React.createClass({
     componentDidMount() {
         this.loadData()
     },
+    getFieldPos(name) {
+        return _.find(this.state.fields, f => f.text== name)._id
+    },
     render() {
-        var houses = "",
-            redfinId = this.state.redfin,
-            [displayable, hidden] = _.partition(this.state.fields, (field) => {return field.show}),
-            dtPos = (_.find(this.state.fields, function(f) { return f.text== 'last_loaded'}) || {})._id,
-            stPos = (_.find(this.state.fields, function(f) { return f.text== 'status'}) || {})._id,
-            maxDate = _.chain(this.state.listings).map(function(l) {return l[dtPos].$date}).max().value(),
-            listings;
+        if (!this.state.listings.length) return false
+        var redfinId = this.state.redfin,
+            [displayable, hidden] = _.partition(this.state.fields, field => field.show),
+            dtPos = this.getFieldPos("last_loaded"),
+            stPos = this.getFieldPos("status"),
+            maxDate = _.chain(this.state.listings).map(l => l[dtPos].$date).max().value(),
+            houses = _.chain(this.state.listings)
+                        .filter(l => !this.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active")
+                        .sortBy(l => _.map(displayable,  f => l[f._id]).join("$"))
+                        .map(function(l) {
+                            return (<House key={l[redfinId]} listing={l} fields={displayable}/> )
+                            }.bind(this))
+                        .value();
 
-        if (displayable.length) {
-            listings = //this.state.listings
-                !this.state.currentsOnly ? this.state.listings :
-                _.filter(this.state.listings, l => l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active")
-            houses = _.map(listings, function(listing) {
-                return (<House key={listing[redfinId]} listing={listing} fields={displayable}/> )
-            }.bind(this));
-        }
         return (
             <Grid fluid={true}>
                 <Header fields={displayable} createSortable={this.createSortable} canMove={this.state.canMove}/>
