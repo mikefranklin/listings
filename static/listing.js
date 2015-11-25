@@ -9,7 +9,8 @@ function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.const
 
 var signaller = {
     headerUpdated: new signals.Signal(),
-    moveToggled: new signals.Signal()
+    moveToggled: new signals.Signal(),
+    currentsSelected: new signals.Signal()
 };
 
 function retryAjax(params, options) {
@@ -124,8 +125,15 @@ var HouseItem = React.createClass({
         });
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef();
     },
+    formatter_url: function formatter_url(url) {
+        return React.createElement(
+            "a",
+            { href: url, target: "_blank" },
+            "Redfin"
+        );
+    },
     formatter: function formatter(value, header) {
-        return (this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value);
+        return (this["formatter_" + header.text] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value);
     },
     getInitialState: function getInitialState() {
         return { name: "", value: "", field: {} };
@@ -161,16 +169,26 @@ var Control = React.createClass({
                 field.text
             );
         }),
-            style = this.props.canMove ? "success" : "default";
+            moveStyle = this.props.canMove ? "success" : "default",
+            curStyle = this.props.currentsOnly ? "success" : "default";
         return React.createElement(
             Row,
             { className: "control" },
             React.createElement(
                 Col,
-                { md: 1, mdOffset: 10 },
+                { md: 1, mdOffset: 9 },
                 React.createElement(
                     Button,
-                    { bsStyle: style, onClick: _.bind(this.signal, this, "moveToggled") },
+                    { bsStyle: curStyle, onClick: _.bind(this.signal, this, "currentsSelected") },
+                    "Current Active"
+                )
+            ),
+            React.createElement(
+                Col,
+                { md: 1 },
+                React.createElement(
+                    Button,
+                    { bsStyle: moveStyle, onClick: _.bind(this.signal, this, "moveToggled") },
                     "Toggle move"
                 )
             ),
@@ -179,7 +197,7 @@ var Control = React.createClass({
                 { md: 1 },
                 React.createElement(
                     DropdownButton,
-                    { title: "Unhide", id: "unhide", pullRight: true },
+                    { title: "Unhide", id: "unhide" },
                     hidden
                 )
             )
@@ -251,10 +269,14 @@ var App = React.createClass({
     getInitialState: function getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
         signaller.moveToggled.add(this.moveToggled);
-        return { fields: {}, listings: [], redfin: null, canMove: false };
+        signaller.currentsSelected.add(this.currentsSelected);
+        return { fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false };
     },
     moveToggled: function moveToggled() {
         this.setState({ canMove: !this.state.canMove });
+    },
+    currentsSelected: function currentsSelected() {
+        this.setState({ currentsOnly: !this.state.currentsOnly });
     },
     componentDidMount: function componentDidMount() {
         this.loadData();
@@ -271,9 +293,23 @@ var App = React.createClass({
 
         var displayable = _$partition2[0];
         var hidden = _$partition2[1];
+        var dtPos = (_.find(this.state.fields, function (f) {
+            return f.text == 'last_loaded';
+        }) || {})._id;
+        var stPos = (_.find(this.state.fields, function (f) {
+            return f.text == 'status';
+        }) || {})._id;
+        var maxDate = _.chain(this.state.listings).map(function (l) {
+            return l[dtPos].$date;
+        }).max().value();
+        var listings;
 
         if (displayable.length) {
-            houses = _.map(this.state.listings, (function (listing) {
+            listings = //this.state.listings
+            !this.state.currentsOnly ? this.state.listings : _.filter(this.state.listings, function (l) {
+                return l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active";
+            });
+            houses = _.map(listings, (function (listing) {
                 return React.createElement(House, { key: listing[redfinId], listing: listing, fields: displayable });
             }).bind(this));
         }
@@ -281,7 +317,7 @@ var App = React.createClass({
             Grid,
             { fluid: true },
             React.createElement(Header, { fields: displayable, createSortable: this.createSortable, canMove: this.state.canMove }),
-            React.createElement(Control, { hidden: hidden, canMove: this.state.canMove }),
+            React.createElement(Control, { hidden: hidden, canMove: this.state.canMove, currentsOnly: this.state.currentsOnly }),
             houses
         );
     }
@@ -298,20 +334,24 @@ var FieldEditor = React.createClass({
     componentWillReceiveProps: function componentWillReceiveProps(nextProps) {
         this.setState(nextProps);
     },
+    updateText: function updateText(event) {
+        this.setState({ text: event.target.value });
+    },
+    updateBS: function updateBS(event) {
+        this.setState({ bucketSize: event.target.value });
+    },
     signal: function signal(name, close) {
-        var _console;
-
-        if (close) this.close();
+        var _signaller$name2;
 
         for (var _len = arguments.length, args = Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
             args[_key - 2] = arguments[_key];
         }
 
-        (_console = console).log.apply(_console, [name, close].concat(args));
-        //signaller[name].dispatch(...args)
+        (_signaller$name2 = signaller[name]).dispatch.apply(_signaller$name2, args);
+        if (close) this.close();
     },
     render: function render() {
-        var _ref, _ref2, _ref3, _ref4;
+        var _ref, _ref2, _ref3, _ref4, _ref5;
 
         var field = this.state.field,
             fieldId = field._id,
@@ -368,12 +408,16 @@ var FieldEditor = React.createClass({
                                 { className: "values" },
                                 React.createElement(
                                     Button,
-                                    { bsSize: "small", onClick: (_ref2 = _).bind.apply(_ref2, updateClose.concat(["columns", 1])) },
+                                    { bsSize: "small",
+                                        bsStyle: field.columns == 1 ? "success" : "default",
+                                        onClick: (_ref2 = _).bind.apply(_ref2, updateClose.concat(["columns", 1])) },
                                     "One"
                                 ),
                                 React.createElement(
                                     Button,
-                                    { bsSize: "small", onClick: (_ref3 = _).bind.apply(_ref3, updateClose.concat(["columns", 2])) },
+                                    { bsSize: "small",
+                                        bsStyle: field.columns == 1 ? "default" : "success",
+                                        onClick: (_ref3 = _).bind.apply(_ref3, updateClose.concat(["columns", 2])) },
                                     "Two"
                                 )
                             )
@@ -389,8 +433,37 @@ var FieldEditor = React.createClass({
                             React.createElement(
                                 "td",
                                 { className: "values" },
-                                React.createElement("input", { type: "text", style: { width: "100%" },
-                                    onBlur: (_ref4 = _).bind.apply(_ref4, updateClose.concat(["text", this.value])) })
+                                React.createElement("input", { type: "text", defaultValue: field.text,
+                                    onChange: this.updateText }),
+                                React.createElement(
+                                    Button,
+                                    { bsSize: "small", bsStyle: "primary",
+                                        onClick: (_ref4 = _).bind.apply(_ref4, updateClose.concat(["text", this.state.text])) },
+                                    "Save"
+                                )
+                            )
+                        ),
+                        React.createElement(
+                            "tr",
+                            null,
+                            React.createElement(
+                                "td",
+                                { className: "title" },
+                                "bucket size"
+                            ),
+                            React.createElement(
+                                "td",
+                                { className: "values" },
+                                React.createElement("input", { type: "text", defaultValue: field.bucketSize || 0,
+                                    onChange: this.updateBS }),
+                                React.createElement(
+                                    Button,
+                                    { bsSize: "small", bsStyle: "primary",
+                                        onClick: (_ref5 = _).bind.apply(_ref5, updateClose.concat(["bucketSize", this.state.bucketSize])) },
+                                    "Save"
+                                ),
+                                React.createElement("br", null),
+                                "* = distinct"
                             )
                         )
                     )

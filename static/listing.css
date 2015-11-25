@@ -48,3 +48,13 @@
 .values {
   padding: 4px
 }
+
+.values {
+  width: 100%
+}
+
+.values input {
+  width: 80%;
+  margin-right: 5px;
+  height: 30px;
+}

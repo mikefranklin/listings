@@ -3,6 +3,7 @@
 var signaller = {
   headerUpdated: new signals.Signal(),
   moveToggled: new signals.Signal(),
+  currentsSelected: new signals.Signal()
 };
 
 function retryAjax(params, options) {
@@ -90,8 +91,13 @@ var HouseItem = React.createClass({
         var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
     },
+    formatter_url(url) {
+        return <a href={url} target="_blank">Redfin</a>
+    },
     formatter(value, header) {
-        return (this["formatter_" + (typeof value)] || this.formatter_undef)(value)
+        return (this["formatter_" + header.text]
+                || this["formatter_" + (typeof value)]
+                || this.formatter_undef)(value)
     },
     getInitialState() {
         return {name: "", value: "", field: {}};
@@ -118,16 +124,22 @@ var Control = React.createClass({
                 var click = _.bind(this.signal, this, "headerUpdated", field._id, "show", true)
                 return <MenuItem key={field._id} onClick={click}>{field.text}</MenuItem>
             }),
-            style = this.props.canMove ? "success" : "default"
+            moveStyle = this.props.canMove ? "success" : "default",
+            curStyle = this.props.currentsOnly ? "success" : "default";
         return (
             <Row className="control">
-                <Col md={1} mdOffset={10}>
-                    <Button bsStyle={style} onClick={_.bind(this.signal, this, "moveToggled")}>
+                <Col md={1} mdOffset={9}>
+                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentsSelected")}>
+                        Current Active
+                    </Button>
+                </Col>
+                <Col md={1}>
+                    <Button bsStyle={moveStyle} onClick={_.bind(this.signal, this, "moveToggled")}>
                         Toggle move
                     </Button>
                 </Col>
                 <Col md={1}>
-                    <DropdownButton title="Unhide" id="unhide" pullRight>
+                    <DropdownButton title="Unhide" id="unhide">
                     {hidden}
                     </DropdownButton>
                 </Col>
@@ -196,10 +208,14 @@ var App = React.createClass({
     getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
         signaller.moveToggled.add(this.moveToggled)
-        return {fields: {}, listings: [], redfin: null, canMove: false}
+        signaller.currentsSelected.add(this.currentsSelected)
+        return {fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false}
     },
     moveToggled() {
         this.setState({canMove: !this.state.canMove })
+    },
+    currentsSelected() {
+        this.setState({currentsOnly: !this.state.currentsOnly})
     },
     componentDidMount() {
         this.loadData()
@@ -207,16 +223,24 @@ var App = React.createClass({
     render() {
         var houses = "",
             redfinId = this.state.redfin,
-            [displayable, hidden] = _.partition(this.state.fields, (field) => {return field.show})
+            [displayable, hidden] = _.partition(this.state.fields, (field) => {return field.show}),
+            dtPos = (_.find(this.state.fields, function(f) { return f.text== 'last_loaded'}) || {})._id,
+            stPos = (_.find(this.state.fields, function(f) { return f.text== 'status'}) || {})._id,
+            maxDate = _.chain(this.state.listings).map(function(l) {return l[dtPos].$date}).max().value(),
+            listings;
+
         if (displayable.length) {
-            houses = _.map(this.state.listings, function(listing) {
+            listings = //this.state.listings
+                !this.state.currentsOnly ? this.state.listings :
+                _.filter(this.state.listings, l => l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active")
+            houses = _.map(listings, function(listing) {
                 return (<House key={listing[redfinId]} listing={listing} fields={displayable}/> )
             }.bind(this));
         }
         return (
             <Grid fluid={true}>
                 <Header fields={displayable} createSortable={this.createSortable} canMove={this.state.canMove}/>
-                <Control hidden={hidden} canMove={this.state.canMove}/>
+                <Control hidden={hidden} canMove={this.state.canMove} currentsOnly={this.state.currentsOnly}/>
                 {houses}
             </Grid>
         )
@@ -233,10 +257,15 @@ var FieldEditor = React.createClass ({
     componentWillReceiveProps(nextProps) {
         this.setState(nextProps)
     },
+    updateText(event) {
+        this.setState({text: event.target.value})
+    },
+    updateBS(event) {
+        this.setState({bucketSize: event.target.value})
+    },
     signal(name, close, ...args) {
+        signaller[name].dispatch(...args)
         if (close) this.close()
-        console.log(name, close, ...args)
-        //signaller[name].dispatch(...args)
     },
     render() {
         var field = this.state.field,
@@ -261,15 +290,31 @@ var FieldEditor = React.createClass ({
                           <tr>
                               <td className="title">Columns</td>
                               <td className="values">
-                                  <Button bsSize="small" onClick={_.bind(...updateClose, "columns", 1)}>One</Button>
-                                  <Button bsSize="small" onClick={_.bind(...updateClose, "columns", 2)}>Two</Button>
+                                  <Button bsSize="small"
+                                      bsStyle={field.columns == 1 ? "success" : "default"}
+                                      onClick={_.bind(...updateClose, "columns", 1)}>One</Button>
+                                  <Button bsSize="small"
+                                      bsStyle={field.columns == 1 ? "default" : "success"}
+                                      onClick={_.bind(...updateClose, "columns", 2)}>Two</Button>
                               </td>
                           </tr>
                           <tr>
                             <td className="title">Text</td>
                             <td className="values">
-                                <input type="text" style={{width: "100%"}}
-                                    onBlur={_.bind(...updateClose, "text", this.value)}/>
+                                <input type="text" defaultValue={field.text}
+                                    onChange={this.updateText}/>
+                                <Button bsSize="small" bsStyle="primary"
+                                    onClick={_.bind(...updateClose, "text", this.state.text)}>Save</Button>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="title">bucket size</td>
+                            <td className="values">
+                                <input type="text" defaultValue={field.bucketSize || 0}
+                                    onChange={this.updateBS}/>
+                                <Button bsSize="small" bsStyle="primary"
+                                    onClick={_.bind(...updateClose, "bucketSize", this.state.bucketSize)}>Save</Button>
+                                <br/>* = distinct
                             </td>
                           </tr>
                       </tbody>
