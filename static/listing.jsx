@@ -88,6 +88,7 @@ var HouseItem = React.createClass({
     formatter_undef() { return "~undefined~"},
     formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')},
     formatter_string(s) { return s },
+    formatter_number(s) { return String(s)},
     formatter_object(obj) {
         var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
@@ -130,7 +131,7 @@ var Control = React.createClass({
         return (
             <Row className="control">
                 <Col md={1} mdOffset={8}>
-                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "newField")}>
+                    <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
                         New Field
                     </Button>
                 </Col>
@@ -187,16 +188,53 @@ var App = React.createClass({
 
         retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
             .done(function(content){
-                console.log("worked!", data, arguments)
+                //console.log("worked!", data, arguments)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
             }.bind(this))
     },
+    updateBuckets(content) {
+        _.chain(content.fields)
+            .filter(f => f.bucketSize !== undefined)
+            .each(f => {
+                var id = f._id,
+                    buckets = f.buckets || {}, // [bucket] = weighting value
+                    size = f.bucketSize,
+                    vals = _.chain(content.listings)
+                            .pluck(id)
+                            .uniq()
+                            .value()
+                if (size == "*") {
+                    _.each(vals, v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
+                } else {
+                    //_.chain(content.listings).pluck(32).uniq().map(function(n) {return Math.floor(n/25)}).uniq().map(function(n) {return n * 25}).sortBy().value()
+                }
+
+            })
+    },
+    updateMath(content) {
+        _.chain(content.fields)
+            .filter(f => f.math !== undefined)
+            .each(f => {
+                var math = f.math,
+                    id = f._id
+                _.each(content.fields, f => {math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]")})
+                _.each(content.listings, l => {
+                    try {
+                        eval("l[" + id + "]=" + math)
+                    } catch (e) {
+                        l[id] = "***"
+                    }
+                })
+            })
+        console.log(content)
+    },
     loadData() {
         retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) {
                 content.redfin = _.find(content.fields, (f) => {return f.redfin == "_id"})._id;
+                this.updateMath(content)
                 this.setState(content) // {fields: [{field info}], listsings: [[data, ...], ...]}
             }.bind(this))
             .fail(function() {
@@ -212,21 +250,28 @@ var App = React.createClass({
         this.setState(fields)
     },
     addNewField() {
-        var len = this.state.fields.length;
-
-        this.state.fields.push(
-            _.extend(_.clone(this.state.fields[0]), {
-                id: len,
+        var len = this.state.fields.length,
+            newState = _.clone(this.state),
+            field =  _.extend(_.clone(this.state.fields[0]), {
+                _id: len,
                 redfin: "new_" + len,
+                fieldname: "new_" + len,
                 sequence: len,
                 show: true,
-                text: "new_" + len
-            })
-        )
+                text: "new_" + len})
 
-        _.each(this.state.listings, l => l.push(""))
+        newState.fields.push(field)
+        _.each(newState.listings, l => l.push(""))
+        this.setState(newState)
 
-        console.log(this.state.fields, this.state.listings)
+        retryAjax(JSON.stringify(field), {api: "/savenewfield", type: "post"})
+            .done(function(content){
+                console.log("worked!", arguments)
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+
     },
     getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
@@ -288,6 +333,9 @@ var FieldEditor = React.createClass ({
     updateBS(event) {
         this.setState({bucketSize: event.target.value})
     },
+    updateMath(event) {
+        this.setState({math: event.target.value})
+    },
     signal(name, close, ...args) {
         signaller[name].dispatch(...args)
         if (close) this.close()
@@ -340,6 +388,15 @@ var FieldEditor = React.createClass ({
                                 <Button bsSize="small" bsStyle="primary"
                                     onClick={_.bind(...updateClose, "bucketSize", this.state.bucketSize)}>Save</Button>
                                 <br/>* = distinct
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="title">Math</td>
+                            <td className="values">
+                                <input type="text" defaultValue={field.math || ""}
+                                    onChange={this.updateMath}/>
+                                <Button bsSize="small" bsStyle="primary"
+                                    onClick={_.bind(...updateClose, "math", this.state.math)}>Save</Button>
                             </td>
                           </tr>
                       </tbody>

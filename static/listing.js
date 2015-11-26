@@ -120,6 +120,9 @@ var HouseItem = React.createClass({
     formatter_string: function formatter_string(s) {
         return s;
     },
+    formatter_number: function formatter_number(s) {
+        return String(s);
+    },
     formatter_object: function formatter_object(obj) {
         var f = _.find([["$date", "date"]], function (pair) {
             return obj[pair[0]] !== undefined;
@@ -180,7 +183,7 @@ var Control = React.createClass({
                 { md: 1, mdOffset: 8 },
                 React.createElement(
                     Button,
-                    { bsStyle: curStyle, onClick: _.bind(this.signal, this, "newField") },
+                    { bsStyle: "info", onClick: _.bind(this.signal, this, "newField") },
                     "New Field"
                 )
             ),
@@ -250,16 +253,54 @@ var App = React.createClass({
         }
 
         retryAjax(JSON.stringify(data), { api: "/saveheaderdata", type: "post" }).done((function (content) {
-            console.log("worked!", data, arguments);
+            //console.log("worked!", data, arguments)
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
+    },
+    updateBuckets: function updateBuckets(content) {
+        _.chain(content.fields).filter(function (f) {
+            return f.bucketSize !== undefined;
+        }).each(function (f) {
+            var id = f._id,
+                buckets = f.buckets || {},
+                // [bucket] = weighting value
+            size = f.bucketSize,
+                vals = _.chain(content.listings).pluck(id).uniq().value();
+            if (size == "*") {
+                _.each(vals, function (v) {
+                    return buckets[v] = buckets[v] === undefined ? 0 : buckets[v];
+                });
+            } else {
+                //_.chain(content.listings).pluck(32).uniq().map(function(n) {return Math.floor(n/25)}).uniq().map(function(n) {return n * 25}).sortBy().value()
+            }
+        });
+    },
+    updateMath: function updateMath(content) {
+        _.chain(content.fields).filter(function (f) {
+            return f.math !== undefined;
+        }).each(function (f) {
+            var math = f.math,
+                id = f._id;
+            _.each(content.fields, function (f) {
+                math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]");
+            });
+            _.each(content.listings, function (l) {
+                try {
+                    eval("l[" + id + "]=" + math);
+                } catch (e) {
+                    l[id] = "***";
+                }
+            });
+        });
+        console.log(content);
     },
     loadData: function loadData() {
         retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
             content.redfin = _.find(content.fields, function (f) {
                 return f.redfin == "_id";
             })._id;
+            this.updateMath(content);
             this.setState(content); // {fields: [{field info}], listsings: [[data, ...], ...]}
         }).bind(this)).fail((function () {
             console.log(arguments);
@@ -277,21 +318,27 @@ var App = React.createClass({
         this.setState(fields);
     },
     addNewField: function addNewField() {
-        var len = this.state.fields.length;
-
-        this.state.fields.push(_.extend(_.clone(this.state.fields[0]), {
-            id: len,
+        var len = this.state.fields.length,
+            newState = _.clone(this.state),
+            field = _.extend(_.clone(this.state.fields[0]), {
+            _id: len,
             redfin: "new_" + len,
+            fieldname: "new_" + len,
             sequence: len,
             show: true,
-            text: "new_" + len
-        }));
+            text: "new_" + len });
 
-        _.each(this.state.listings, function (l) {
+        newState.fields.push(field);
+        _.each(newState.listings, function (l) {
             return l.push("");
         });
+        this.setState(newState);
 
-        console.log(this.state.fields, this.state.listings);
+        retryAjax(JSON.stringify(field), { api: "/savenewfield", type: "post" }).done((function (content) {
+            console.log("worked!", arguments);
+        }).bind(this)).fail((function () {
+            console.log(arguments);
+        }).bind(this));
     },
     getInitialState: function getInitialState() {
         signaller.headerUpdated.add(this.headerUpdated);
@@ -370,6 +417,9 @@ var FieldEditor = React.createClass({
     updateBS: function updateBS(event) {
         this.setState({ bucketSize: event.target.value });
     },
+    updateMath: function updateMath(event) {
+        this.setState({ math: event.target.value });
+    },
     signal: function signal(name, close) {
         var _signaller$name2;
 
@@ -381,7 +431,7 @@ var FieldEditor = React.createClass({
         if (close) this.close();
     },
     render: function render() {
-        var _ref, _ref2, _ref3, _ref4, _ref5;
+        var _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
 
         var field = this.state.field,
             fieldId = field._id,
@@ -494,6 +544,27 @@ var FieldEditor = React.createClass({
                                 ),
                                 React.createElement("br", null),
                                 "* = distinct"
+                            )
+                        ),
+                        React.createElement(
+                            "tr",
+                            null,
+                            React.createElement(
+                                "td",
+                                { className: "title" },
+                                "Math"
+                            ),
+                            React.createElement(
+                                "td",
+                                { className: "values" },
+                                React.createElement("input", { type: "text", defaultValue: field.math || "",
+                                    onChange: this.updateMath }),
+                                React.createElement(
+                                    Button,
+                                    { bsSize: "small", bsStyle: "primary",
+                                        onClick: (_ref6 = _).bind.apply(_ref6, updateClose.concat(["math", this.state.math])) },
+                                    "Save"
+                                )
                             )
                         )
                     )

@@ -62,7 +62,7 @@ def condense_listings(raw_listings, headers):
     for listing in raw_listings:
         entry = [""] * maxId
         for header in headers:
-            entry[header["_id"]] = listing[header["redfin"]]
+            entry[header["_id"]] = listing.get(header["redfin"], "")
         yield(entry)
 
 
@@ -98,6 +98,16 @@ def save_header_data():
         bulk.find({'_id': _id}).update({'$set': update(value)})
 
     return json.dumps(bulk.execute())
+
+
+@app.route("/savenewfield", methods=["PUT", "POST"])
+def save_new_field():
+    data = request.get_json(force=True)
+    field = {"_id": data.pop("_id"), "redfin": data.pop("redfin"), "_default": data}
+
+    res = mongo.db.headers.insert_one(field)
+
+    return json.dumps([res, field])
 
 
 @app.route('/import')
