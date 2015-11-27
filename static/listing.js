@@ -272,7 +272,13 @@ var App = React.createClass({
                     return buckets[v] = buckets[v] === undefined ? 0 : buckets[v];
                 });
             } else {
-                //_.chain(content.listings).pluck(32).uniq().map(function(n) {return Math.floor(n/25)}).uniq().map(function(n) {return n * 25}).sortBy().value()
+                _.chain(content.listings).pluck(id).uniq().map(function (v) {
+                    return Math.floor(v / size);
+                }).uniq().map(function (v) {
+                    return v * size;
+                }).sortBy().each(function (v) {
+                    return buckets[v] = buckets[v] === undefined ? 0 : buckets[v];
+                });
             }
         });
     },
@@ -403,22 +409,21 @@ var App = React.createClass({
 var FieldEditor = React.createClass({
     displayName: "FieldEditor",
     getInitialState: function getInitialState() {
-        return { showModal: false, field: {} };
+        return { showModal: false, field: {}, text: "", bucketSize: "", math: "", distanceTo: "" };
     },
     close: function close() {
-        this.setState({ showModal: false });
+        var state = _.clone(this.state);
+        state.showModal = false;
+        this.setState(state);
     },
     componentWillReceiveProps: function componentWillReceiveProps(nextProps) {
         this.setState(nextProps);
     },
-    updateText: function updateText(event) {
-        this.setState({ text: event.target.value });
-    },
-    updateBS: function updateBS(event) {
-        this.setState({ bucketSize: event.target.value });
-    },
-    updateMath: function updateMath(event) {
-        this.setState({ math: event.target.value });
+    update: function update(name, event) {
+        var s = _.clone(this.state);
+        s[name] = event.target.value;
+        console.log(s);
+        this.setState(s);
     },
     signal: function signal(name, close) {
         var _signaller$name2;
@@ -431,7 +436,7 @@ var FieldEditor = React.createClass({
         if (close) this.close();
     },
     render: function render() {
-        var _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
+        var _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
 
         var field = this.state.field,
             fieldId = field._id,
@@ -514,7 +519,7 @@ var FieldEditor = React.createClass({
                                 "td",
                                 { className: "values" },
                                 React.createElement("input", { type: "text", defaultValue: field.text,
-                                    onChange: this.updateText }),
+                                    onChange: _.bind(this.update, this, "text") }),
                                 React.createElement(
                                     Button,
                                     { bsSize: "small", bsStyle: "primary",
@@ -535,7 +540,7 @@ var FieldEditor = React.createClass({
                                 "td",
                                 { className: "values" },
                                 React.createElement("input", { type: "text", defaultValue: field.bucketSize || 0,
-                                    onChange: this.updateBS }),
+                                    onChange: _.bind(this.update, this, "bucketSize") }),
                                 React.createElement(
                                     Button,
                                     { bsSize: "small", bsStyle: "primary",
@@ -558,11 +563,32 @@ var FieldEditor = React.createClass({
                                 "td",
                                 { className: "values" },
                                 React.createElement("input", { type: "text", defaultValue: field.math || "",
-                                    onChange: this.updateMath }),
+                                    onChange: _.bind(this.update, this, "math") }),
                                 React.createElement(
                                     Button,
                                     { bsSize: "small", bsStyle: "primary",
                                         onClick: (_ref6 = _).bind.apply(_ref6, updateClose.concat(["math", this.state.math])) },
+                                    "Save"
+                                )
+                            )
+                        ),
+                        React.createElement(
+                            "tr",
+                            null,
+                            React.createElement(
+                                "td",
+                                { className: "title" },
+                                "Distance to"
+                            ),
+                            React.createElement(
+                                "td",
+                                { className: "values" },
+                                React.createElement("input", { type: "text", defaultValue: field.distanceTo || "",
+                                    onChange: _.bind(this.update, this, "distanceTo") }),
+                                React.createElement(
+                                    Button,
+                                    { bsSize: "small", bsStyle: "primary",
+                                        onClick: (_ref7 = _).bind.apply(_ref7, updateClose.concat(["distanceTo", this.state.distanceTo])) },
                                     "Save"
                                 )
                             )

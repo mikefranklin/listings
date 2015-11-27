@@ -208,7 +208,10 @@ var App = React.createClass({
                 if (size == "*") {
                     _.each(vals, v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
                 } else {
-                    //_.chain(content.listings).pluck(32).uniq().map(function(n) {return Math.floor(n/25)}).uniq().map(function(n) {return n * 25}).sortBy().value()
+                    _.chain(content.listings).pluck(id).uniq()
+                        .map(v => Math.floor(v / size)).uniq()
+                        .map(v => v * size).sortBy()
+                        .each(v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
                 }
 
             })
@@ -319,22 +322,21 @@ var App = React.createClass({
 
 var FieldEditor = React.createClass ({
     getInitialState() {
-        return {showModal: false, field: {}}
+        return {showModal: false, field: {}, text: "", bucketSize: "", math: "", distanceTo: ""}
     },
     close() {
-        this.setState({showModal: false});
+        var state = _.clone(this.state)
+        state.showModal = false
+        this.setState(state);
     },
     componentWillReceiveProps(nextProps) {
         this.setState(nextProps)
     },
-    updateText(event) {
-        this.setState({text: event.target.value})
-    },
-    updateBS(event) {
-        this.setState({bucketSize: event.target.value})
-    },
-    updateMath(event) {
-        this.setState({math: event.target.value})
+    update(name, event) {
+        var s = _.clone(this.state)
+        s[name] = event.target.value
+        console.log(s)
+        this.setState(s)
     },
     signal(name, close, ...args) {
         signaller[name].dispatch(...args)
@@ -375,7 +377,7 @@ var FieldEditor = React.createClass ({
                             <td className="title">Text</td>
                             <td className="values">
                                 <input type="text" defaultValue={field.text}
-                                    onChange={this.updateText}/>
+                                    onChange={_.bind(this.update, this, "text")}/>
                                 <Button bsSize="small" bsStyle="primary"
                                     onClick={_.bind(...updateClose, "text", this.state.text)}>Save</Button>
                             </td>
@@ -384,7 +386,7 @@ var FieldEditor = React.createClass ({
                             <td className="title">bucket size</td>
                             <td className="values">
                                 <input type="text" defaultValue={field.bucketSize || 0}
-                                    onChange={this.updateBS}/>
+                                    onChange={_.bind(this.update, this, "bucketSize")}/>
                                 <Button bsSize="small" bsStyle="primary"
                                     onClick={_.bind(...updateClose, "bucketSize", this.state.bucketSize)}>Save</Button>
                                 <br/>* = distinct
@@ -394,9 +396,18 @@ var FieldEditor = React.createClass ({
                             <td className="title">Math</td>
                             <td className="values">
                                 <input type="text" defaultValue={field.math || ""}
-                                    onChange={this.updateMath}/>
+                                    onChange={_.bind(this.update, this, "math")}/>
                                 <Button bsSize="small" bsStyle="primary"
                                     onClick={_.bind(...updateClose, "math", this.state.math)}>Save</Button>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="title">Distance to</td>
+                            <td className="values">
+                                <input type="text" defaultValue={field.distanceTo || ""}
+                                    onChange={_.bind(this.update, this, "distanceTo")}/>
+                                <Button bsSize="small" bsStyle="primary"
+                                    onClick={_.bind(...updateClose, "distanceTo", this.state.distanceTo)}>Save</Button>
                             </td>
                           </tr>
                       </tbody>
