@@ -20,6 +20,16 @@ def hello_world():
     return 'Hello World!'
 
 
+@app.route("/savebrowserapi/<api>")
+def save_brower_api(api):
+    """ save the passed api to the database. """
+
+    result = mongo.db.api.update({"_id": 0}, {"$set": {"_id": 0, "api": api}},
+                                 upsert=True)
+
+    return json.dumps(result)
+
+
 @app.route("/listings")
 def show_listings():
     """ show listings """
@@ -51,7 +61,9 @@ def get_data():
     # merge_listings_with_headers(listings, headers)
     listings = condense_listings(raw_listings, headers)
 
-    return json.dumps({"fields": headers, "listings": list(listings)},
+    return json.dumps({"api": list(mongo.db.api.find())[0]["api"],
+                       "fields": headers,
+                       "listings": list(listings)},
                       default=json_util.default)
 
 
@@ -88,6 +100,16 @@ def update_and_retrieve_headers(listings):
     return sorted(headers, key=itemgetter("sequence"))
 
 
+# var data = {id: id, fieldname: fieldname, value: value}
+# retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
+@app.route("/savelistingdata", methods=["PUT", "POST"])
+def save_listing_data():
+    data = request.get_json(force=True)
+    res = mongo.db.listings.update({"_id": data.id},
+                                   {"$set": {data.fieldname: data.value}})
+    return json.dumps(list(res))
+
+
 @app.route("/saveheaderdata", methods=["PUT", "POST"])
 def save_header_data():
     data = request.get_json(force=True)  # fieldname, data=[[_id, value]...
@@ -107,7 +129,7 @@ def save_new_field():
 
     res = mongo.db.headers.insert_one(field)
 
-    return json.dumps([res, field])
+    return json.dumps([list(res), field])
 
 
 @app.route('/import')

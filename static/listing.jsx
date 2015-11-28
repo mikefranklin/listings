@@ -1,5 +1,8 @@
 "use babel";
-
+/*
+sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
+the tasting room: 39.415732,-77.410943
+*/
 var signaller = {
   headerUpdated: new signals.Signal(),
   moveToggled: new signals.Signal(),
@@ -37,7 +40,12 @@ var Header = React.createClass({
     },
     render() {
         var items = _.map(this.props.fields, (field) => {
-                            return (<HeaderItem key={field._id} field={field} canMove={this.props.canMove}/>)
+                            return (
+                                <HeaderItem
+                                    key={field._id}
+                                    field={field}
+                                    canMove={this.props.canMove}
+                                    updateDT={this.props.updateDT}/>)
                         })
         return (<Row className="header">{items}</Row>);
     }
@@ -58,12 +66,14 @@ var HeaderItem = React.createClass({
                 : (<div className="btn-xsmall move" bsSize="xsmall">
                         <i className="fa fa-bars"></i>
                     </div>);
-
         return (
             <Col md={cols} data-position={field.sequence} data-id={field._id} className="item">
                 {move}
                 <div className="edit" onClick={this.openFieldEditor}>{field.text}</div>
-                <FieldEditor showModal={this.state.showModal} field={this.props.field}/>
+                <FieldEditor
+                    showModal={this.state.showModal}
+                    field={this.props.field}
+                    updateDT={this.props.updateDT}/>
             </Col>
         )
     }
@@ -194,6 +204,62 @@ var App = React.createClass({
                 console.log(arguments)
             }.bind(this))
     },
+    updateListingDB(id, fieldname, value) {
+        var data = {id: id, fieldname: fieldname, value: value}
+        retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
+            .done(function(content) {
+                console.log("worked!", content)
+            }.bind(this))
+            .fail(function() {
+                console.log("failed", arguments)
+            }.bind(this))
+    },
+    /*https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175*/
+    updateSomeDistances(opts) {
+        var listings = _.chain(opts.listings)
+                        .filter(l => !l[opts.fieldId])
+                        .first(opts.count)
+                        .value();
+        if (!listings.length) return
+
+       _.each(listings, listing => {
+            var request = _.clone(opts.base);
+            request.origin = listing[opts.lat] + "," + listing[opts.long]
+            opts.directionsService.route(request, (response, status) => {
+                try {
+                    var duration = response.routes[0].legs[0].duration // distance.text, duration.text
+                    listing[opts.fieldId] = parseInt(duration.text)
+                    this.setState(opts.state)
+                    //this.updateListingDB(listing[opts.state.redfin], headerName, parseInt(duration.text))
+               } catch (e) {
+                    console.log("error getting directions for", listing, e)
+                    listing[opts.fieldId] = "00"
+
+                }
+                console.log(listing[opts.fieldId])
+            })
+        })
+
+        _.delay(this.updateSomeDistances, opts.wait, opts)
+    },
+
+    updateDistanceTo(fieldId, location) {
+        var state = _.clone(this.state)
+
+        this.updateSomeDistances({
+            base: {destination: location, travelMode: google.maps.TravelMode.WALKING},
+            directionsService: new google.maps.DirectionsService(),
+            fieldId: fieldId,
+            state: state,
+            field: state.fields[fieldId],
+            lat: this.getFieldPos("latitude"),
+            long: this.getFieldPos("longitude"),
+            listings: state.listings,
+            count: 2,
+            wait: 1500})
+        console.log(state) // should defer updating state/db for a second?)
+
+    },
     updateBuckets(content) {
         _.chain(content.fields)
             .filter(f => f.bucketSize !== undefined)
@@ -213,7 +279,6 @@ var App = React.createClass({
                         .map(v => v * size).sortBy()
                         .each(v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
                 }
-
             })
     },
     updateMath(content) {
@@ -239,6 +304,7 @@ var App = React.createClass({
                 content.redfin = _.find(content.fields, (f) => {return f.redfin == "_id"})._id;
                 this.updateMath(content)
                 this.setState(content) // {fields: [{field info}], listsings: [[data, ...], ...]}
+                $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
@@ -251,6 +317,7 @@ var App = React.createClass({
         fields[index][headerName] = value
         this.updateDB(headerName, fields[index])
         this.setState(fields)
+        if (typeof args[0] == "function") args[0]()
     },
     addNewField() {
         var len = this.state.fields.length,
@@ -312,7 +379,11 @@ var App = React.createClass({
 
         return (
             <Grid fluid={true}>
-                <Header fields={displayable} createSortable={this.createSortable} canMove={this.state.canMove}/>
+                <Header
+                    fields={displayable}
+                    createSortable={this.createSortable}
+                    canMove={this.state.canMove}
+                    updateDT={this.updateDistanceTo}/>
                 <Control hidden={hidden} canMove={this.state.canMove} currentsOnly={this.state.currentsOnly}/>
                 {houses}
             </Grid>
@@ -322,7 +393,7 @@ var App = React.createClass({
 
 var FieldEditor = React.createClass ({
     getInitialState() {
-        return {showModal: false, field: {}, text: "", bucketSize: "", math: "", distanceTo: ""}
+        return {showModal: false, text: "", bucketSize: "", math: "", distanceTo: "", field: {}}
     },
     close() {
         var state = _.clone(this.state)
@@ -330,12 +401,12 @@ var FieldEditor = React.createClass ({
         this.setState(state);
     },
     componentWillReceiveProps(nextProps) {
-        this.setState(nextProps)
+        var state = _.clone(nextProps)
+        this.setState(state)
     },
     update(name, event) {
         var s = _.clone(this.state)
         s[name] = event.target.value
-        console.log(s)
         this.setState(s)
     },
     signal(name, close, ...args) {
@@ -345,7 +416,9 @@ var FieldEditor = React.createClass ({
     render() {
         var field = this.state.field,
             fieldId = field._id,
-            updateClose = [this.signal, this, "headerUpdated", true, fieldId];
+            updateClose = [this.signal, this, "headerUpdated", true, fieldId],
+            e = function() {};
+            //updateDT = this.props.updateDT ? _.bind(this.props.updateDT, null, fieldId) : "";
         return (
             <Modal show={this.state.showModal} onHide={this.close}>
               <Modal.Header closeButton>
@@ -407,7 +480,8 @@ var FieldEditor = React.createClass ({
                                 <input type="text" defaultValue={field.distanceTo || ""}
                                     onChange={_.bind(this.update, this, "distanceTo")}/>
                                 <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "distanceTo", this.state.distanceTo)}>Save</Button>
+                                    onClick={_.bind(...updateClose, "distanceTo", this.state.distanceTo,
+                                        _.bind(this.props.updateDT || e, null, fieldId, this.state.distanceTo))}>Save</Button>
                             </td>
                           </tr>
                       </tbody>
@@ -427,9 +501,4 @@ _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".s
 ReactDOM.render(
   <App />,
   document.getElementById('content')
-);
-
-ReactDOM.render(
-    <FieldEditor/>,
-    document.getElementById("fieldeditor")
 );

@@ -1,5 +1,10 @@
 "use strict";
-"use babel";
+"use babel"
+/*
+sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
+the tasting room: 39.415732,-77.410943
+*/
+;
 
 var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
 
@@ -47,7 +52,11 @@ var Header = React.createClass({
         var _this = this;
 
         var items = _.map(this.props.fields, function (field) {
-            return React.createElement(HeaderItem, { key: field._id, field: field, canMove: _this.props.canMove });
+            return React.createElement(HeaderItem, {
+                key: field._id,
+                field: field,
+                canMove: _this.props.canMove,
+                updateDT: _this.props.updateDT });
         });
         return React.createElement(
             Row,
@@ -74,7 +83,6 @@ var HeaderItem = React.createClass({
             { className: "btn-xsmall move", bsSize: "xsmall" },
             React.createElement("i", { className: "fa fa-bars" })
         );
-
         return React.createElement(
             Col,
             { md: cols, "data-position": field.sequence, "data-id": field._id, className: "item" },
@@ -84,7 +92,10 @@ var HeaderItem = React.createClass({
                 { className: "edit", onClick: this.openFieldEditor },
                 field.text
             ),
-            React.createElement(FieldEditor, { showModal: this.state.showModal, field: this.props.field })
+            React.createElement(FieldEditor, {
+                showModal: this.state.showModal,
+                field: this.props.field,
+                updateDT: this.props.updateDT })
         );
     }
 });
@@ -258,6 +269,59 @@ var App = React.createClass({
             console.log(arguments);
         }).bind(this));
     },
+    updateListingDB: function updateListingDB(id, fieldname, value) {
+        var data = { id: id, fieldname: fieldname, value: value };
+        retryAjax(JSON.stringify(data), { api: "savelistingdata", type: "post" }).done((function (content) {
+            console.log("worked!", content);
+        }).bind(this)).fail((function () {
+            console.log("failed", arguments);
+        }).bind(this));
+    },
+
+    /*https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175*/
+    updateSomeDistances: function updateSomeDistances(opts) {
+        var _this4 = this;
+
+        var listings = _.chain(opts.listings).filter(function (l) {
+            return !l[opts.fieldId];
+        }).first(opts.count).value();
+        if (!listings.length) return;
+
+        _.each(listings, function (listing) {
+            var request = _.clone(opts.base);
+            request.origin = listing[opts.lat] + "," + listing[opts.long];
+            opts.directionsService.route(request, function (response, status) {
+                try {
+                    var duration = response.routes[0].legs[0].duration; // distance.text, duration.text
+                    listing[opts.fieldId] = parseInt(duration.text);
+                    _this4.setState(opts.state);
+                    //this.updateListingDB(listing[opts.state.redfin], headerName, parseInt(duration.text))
+                } catch (e) {
+                    console.log("error getting directions for", listing, e);
+                    listing[opts.fieldId] = "00";
+                }
+                console.log(listing[opts.fieldId]);
+            });
+        });
+
+        _.delay(this.updateSomeDistances, opts.wait, opts);
+    },
+    updateDistanceTo: function updateDistanceTo(fieldId, location) {
+        var state = _.clone(this.state);
+
+        this.updateSomeDistances({
+            base: { destination: location, travelMode: google.maps.TravelMode.WALKING },
+            directionsService: new google.maps.DirectionsService(),
+            fieldId: fieldId,
+            state: state,
+            field: state.fields[fieldId],
+            lat: this.getFieldPos("latitude"),
+            long: this.getFieldPos("longitude"),
+            listings: state.listings,
+            count: 2,
+            wait: 1500 });
+        console.log(state); // should defer updating state/db for a second?)
+    },
     updateBuckets: function updateBuckets(content) {
         _.chain(content.fields).filter(function (f) {
             return f.bucketSize !== undefined;
@@ -308,6 +372,7 @@ var App = React.createClass({
             })._id;
             this.updateMath(content);
             this.setState(content); // {fields: [{field info}], listsings: [[data, ...], ...]}
+            $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api);
         }).bind(this)).fail((function () {
             console.log(arguments);
         }).bind(this));
@@ -322,6 +387,7 @@ var App = React.createClass({
         fields[index][headerName] = value;
         this.updateDB(headerName, fields[index]);
         this.setState(fields);
+        if (typeof arguments[3] == "function") arguments[3]();
     },
     addNewField: function addNewField() {
         var len = this.state.fields.length,
@@ -368,7 +434,7 @@ var App = React.createClass({
         })._id;
     },
     render: function render() {
-        var _this4 = this;
+        var _this5 = this;
 
         if (!this.state.listings.length) return false;
         var redfinId = this.state.redfin;
@@ -387,7 +453,7 @@ var App = React.createClass({
             return l[dtPos].$date;
         }).max().value();
         var houses = _.chain(this.state.listings).filter(function (l) {
-            return !_this4.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active";
+            return !_this5.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active";
         }).sortBy(function (l) {
             return _.map(displayable, function (f) {
                 return l[f._id];
@@ -399,7 +465,11 @@ var App = React.createClass({
         return React.createElement(
             Grid,
             { fluid: true },
-            React.createElement(Header, { fields: displayable, createSortable: this.createSortable, canMove: this.state.canMove }),
+            React.createElement(Header, {
+                fields: displayable,
+                createSortable: this.createSortable,
+                canMove: this.state.canMove,
+                updateDT: this.updateDistanceTo }),
             React.createElement(Control, { hidden: hidden, canMove: this.state.canMove, currentsOnly: this.state.currentsOnly }),
             houses
         );
@@ -409,7 +479,7 @@ var App = React.createClass({
 var FieldEditor = React.createClass({
     displayName: "FieldEditor",
     getInitialState: function getInitialState() {
-        return { showModal: false, field: {}, text: "", bucketSize: "", math: "", distanceTo: "" };
+        return { showModal: false, text: "", bucketSize: "", math: "", distanceTo: "", field: {} };
     },
     close: function close() {
         var state = _.clone(this.state);
@@ -417,12 +487,12 @@ var FieldEditor = React.createClass({
         this.setState(state);
     },
     componentWillReceiveProps: function componentWillReceiveProps(nextProps) {
-        this.setState(nextProps);
+        var state = _.clone(nextProps);
+        this.setState(state);
     },
     update: function update(name, event) {
         var s = _.clone(this.state);
         s[name] = event.target.value;
-        console.log(s);
         this.setState(s);
     },
     signal: function signal(name, close) {
@@ -440,7 +510,9 @@ var FieldEditor = React.createClass({
 
         var field = this.state.field,
             fieldId = field._id,
-            updateClose = [this.signal, this, "headerUpdated", true, fieldId];
+            updateClose = [this.signal, this, "headerUpdated", true, fieldId],
+            e = function e() {};
+        //updateDT = this.props.updateDT ? _.bind(this.props.updateDT, null, fieldId) : "";
         return React.createElement(
             Modal,
             { show: this.state.showModal, onHide: this.close },
@@ -588,7 +660,7 @@ var FieldEditor = React.createClass({
                                 React.createElement(
                                     Button,
                                     { bsSize: "small", bsStyle: "primary",
-                                        onClick: (_ref7 = _).bind.apply(_ref7, updateClose.concat(["distanceTo", this.state.distanceTo])) },
+                                        onClick: (_ref7 = _).bind.apply(_ref7, updateClose.concat(["distanceTo", this.state.distanceTo, _.bind(this.props.updateDT || e, null, fieldId, this.state.distanceTo)])) },
                                     "Save"
                                 )
                             )
@@ -614,6 +686,4 @@ _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".s
 });
 
 ReactDOM.render(React.createElement(App, null), document.getElementById('content'));
-
-ReactDOM.render(React.createElement(FieldEditor, null), document.getElementById("fieldeditor"));
 //# sourceMappingURL=/Users/michaelfranklin/Developer/personal/python/house/static/listing.js.map
