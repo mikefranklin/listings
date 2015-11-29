@@ -11,8 +11,8 @@ app = Flask(__name__)
 mongo = PyMongo(app)
 
 entry = lambda index, text: {"redfin": text, "_id": index,
-                             "_default": {"sequence": index, "text": text, "show": True,
-                                          "fieldname": "field{}".format(index)}}
+                             "_default": {"sequence": index, "text": text,
+                                          "show": True}}
 
 
 @app.route('/')
@@ -21,7 +21,7 @@ def hello_world():
 
 
 @app.route("/savebrowserapi/<api>")
-def save_brower_api(api):
+def save_browser_api(api):
     """ save the passed api to the database. """
 
     result = mongo.db.api.update({"_id": 0}, {"$set": {"_id": 0, "api": api}},
@@ -58,11 +58,11 @@ def get_data():
 
     raw_listings = list(mongo.db.listings.find())
     headers = update_and_retrieve_headers(raw_listings)
-    # merge_listings_with_headers(listings, headers)
     listings = condense_listings(raw_listings, headers)
 
     return json.dumps({"api": list(mongo.db.api.find())[0]["api"],
-                       "fields": headers,
+                       "headers": headers,
+                       "keys": {h["redfin"]: h["_id"] for h in headers},
                        "listings": list(listings)},
                       default=json_util.default)
 
@@ -113,7 +113,7 @@ def save_listing_data():
 @app.route("/saveheaderdata", methods=["PUT", "POST"])
 def save_header_data():
     data = request.get_json(force=True)  # fieldname, data=[[_id, value]...
-    update = lambda value: {"_default." + data["fieldname"]: value}
+    update = lambda value: {"_default." + data["redfin"]: value}
 
     bulk = mongo.db.headers.initialize_unordered_bulk_op()
     for _id, value in data["data"]:

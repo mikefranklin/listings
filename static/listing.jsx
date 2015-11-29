@@ -2,7 +2,241 @@
 /*
 sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
 the tasting room: 39.415732,-77.410943
+https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
 */
+
+class ListingApp {
+    constructor() {
+        _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","),
+            function(m) {window[m] = ReactBootstrap[m]}) // pollute global namespace for convenience
+        this.loadAndRenderData()
+        this.signaller = {
+            headersSorted: new signals.Signal(),
+            moveToggled: new signals.Signal(),
+            headerUpdated: new signals.Signal(),
+            toggleVisibility: new signals.Signal()
+        }
+        return this
+    }
+
+    loadAndRenderData() {
+        this.retryAjax({}, {api: "/getalldata", type: "get"})
+            .done(function(content) { // headers, listings, keys, api
+                $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api)
+                ReactDOM.render(
+                  <App {...content}/>,
+                  document.getElementById('content')
+                );
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+    }
+
+    retryAjax(params, options) {
+        var opts = _.extend({base: "", api: "*required*", dataType: "json",
+                            init: "", delay: 0, type: "post"}, options),
+            url = opts.base + opts.api,
+            tries = opts.tries > 0 ? +opts.tries : 3,
+            def = $.Deferred();
+
+        (function makeRequest() {
+            $.ajax({url: url, dataType: opts.dataType, data: params, type: opts.type})
+                .done(function() {def.resolveWith(this, arguments);})
+                .fail(function() {
+                    if (tries--) {
+                        console.log("failed ", params)
+                        return _.delay(makeRequest, opts.delay, this)
+                    }
+                    def.rejectWith(this, arguments);
+                })
+        }())
+        return def.promise()
+    } // function retryAjax
+
+}
+
+var app = new ListingApp()
+
+class Header extends React.Component {
+    componentDidUpdate() {
+        var sortNode = $(ReactDOM.findDOMNode(this))
+        sortNode = sortNode.sortable({
+            cursor: "move",
+            items: ".item",
+            handle: ".move",
+            update:_.bind(app.signaller.headersSorted.dispatch, null, sortNode)
+        })
+    }
+    render() {
+        // updateDT={this.props.updateDT}/>)
+        var items = _.map(this.props.headers, (header) => {
+                            return (
+                                <HeaderItem
+                                    canMove={this.props.canMove}
+                                    key={header._id}
+                                    header={header}/>)
+                            })
+        return (<Row className="header">{items}</Row>);
+    }
+}
+
+class HeaderItem extends React.Component {
+    signal(name) {
+        app.signaller[name].dispatch(..._.toArray(arguments).slice(1))
+    }
+    // openFieldEditor() {
+    //     this.setState({showModal: true})
+    // },
+    render() { // <FieldEditor field={field}/>
+        var header = this.props.header,
+            click = _.bind(this.signal, this, "toggleVisibility", header._id, false),
+            move = !this.props.canMove
+                ? null
+                : (<div className="btn-xsmall move" bsSize="xsmall">
+                        <i className="fa fa-bars"></i>
+                    </div>);
+
+             //onClick={this.openFieldEditor}
+            // <FieldEditor
+            //     showModal={this.state.showModal}
+            //     field={this.props.field}
+            //     updateDT={this.props.updateDT}/>
+        return (
+            <Col md={1} data-id={header._id} className="item">
+                {move}
+                <div className="edit" >{header.text}</div>
+                <div className="togglevis" onClick={click}>
+                    <i className="fa fa-bolt"/>
+                </div>
+            </Col>
+        )
+    }
+}
+
+class Control extends React.Component {
+    signal(name) {
+        app.signaller[name].dispatch(..._.toArray(arguments).slice(1))
+    }
+    render() {
+        if (!this.props) return false
+        var moveStyle = this.props.canMove ? "success" : "default",
+            curStyle = this.props.currentActivesOnly ? "success" : "default",
+            hidden = _.map(this.props.hidden, (header) => {
+                var select = _.bind(this.signal, this, "toggleVisibility", header._id, true)
+                return <MenuItem key={header._id} onSelect={select}>{header.text}</MenuItem>
+            });
+        return (
+            <Row className="control">
+                <Col md={1} mdOffset={8}>
+                    <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
+                        New Field
+                    </Button>
+                </Col>
+                <Col md={1}>
+                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentsActivesSelected")}>
+                        Current Active
+                    </Button>
+                </Col>
+                <Col md={1}>
+                    <Button bsStyle={moveStyle} onClick={_.bind(this.signal, this, "moveToggled")}>
+                        Toggle move
+                    </Button>
+                </Col>
+                <Col md={1}>
+                    <DropdownButton pullRight title="Unhide" id="unhide">
+                    {hidden}
+                    </DropdownButton>
+                </Col>
+            </Row>)
+    }
+}
+
+class App extends React.Component {
+    constructor(props) {  //headers, listings, keys
+        super(props)
+        var cao = true,
+            keys = props.keys,
+            dt = keys.last_loaded,
+            maxDate = _.chain(props.listings).map(l => l[dt].$date).max().value(),
+            [displayable, hidden] = _.partition(props.headers, h => h.show);
+
+        this.state = {currentActivesOnly: cao, canMove: false,
+                        headers: displayable, hidden: hidden}
+        this.state.listings = _.chain(props.listings)
+                                .filter(l => !cao || l[dt].$date == maxDate
+                                                && l[keys.status].toLowerCase() == "active")
+                                .sortBy(l => _.map(this.state.headers, h => l[h._id]).join("$"))
+                                .value()
+        app.signaller.moveToggled.add(() => this.updateState(s => s.canMove = !s.canMove))
+        app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
+        app.signaller.headerUpdated.add((id, redfin, value) =>
+            this.updateState(s => s.headers[id][redfin] = value,
+                            () => this.saveHeaders(null, redfin, id, value)))
+        app.signaller.toggleVisibility.add((id, show) => this.toggleVisibility(id, show))
+    }
+    updateState(updater, save) {
+        var state = _.clone(this.state);
+        updater(state)
+        this.setState(state)
+        if (save) save()
+        return state
+    }
+    reorderHeaders(sortNode) {
+        var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
+            state = _.clone(this.state)
+
+        ids.forEach((id, index) => {
+            _.find(state.headers, (item) => {return item._id == id}).sequence = index;
+        })
+        state.headers = _.sortBy(state.headers, "sequence")
+        sortNode.sortable("cancel");
+        this.setState(state);
+        this.saveHeaders(state.headers, "sequence")
+    }
+    toggleVisibility(id, show) {
+        var state = _.clone(this.state),
+            opts = [state.headers, state.hidden],
+            source = opts[+show],
+            target = opts[+!show];
+
+        target = _.sortBy(target.push(
+            _.extend(source.splice(_.findIndex(source, h => h._id == id), 1)[0], {show: show}
+        )), "sequence")
+
+        this.setState(state)
+
+        this.saveHeaders(null, "show", id, show)
+    }
+    saveHeaders(headers, redfin, id, value) {
+        var data = {redfin: redfin,
+                    data: headers ? _.map(headers, header => [header._id, header[redfin]])
+                            : [[id, value]]}
+        app.retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
+            .done(function(content){
+                console.log("saving worked!", data, arguments)
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+    }
+    render() {
+        return (
+            <Grid fluid={true}>
+                <Header
+                    headers={this.state.headers}
+                    canMove={this.state.canMove}/>
+                <Control
+                    hidden={this.state.hidden}
+                    canMove={this.state.canMove}
+                    currentActivesOnly={this.state.currentActivesOnly}/>
+            </Grid>
+        )
+    }
+}
+
+
+/*
 var signaller = {
   headerUpdated: new signals.Signal(),
   moveToggled: new signals.Signal(),
@@ -10,74 +244,9 @@ var signaller = {
   newField: new signals.Signal()
 };
 
-function retryAjax(params, options) {
-    var opts = _.extend({base: "", api: "*required*", dataType: "json",
-                        init: "", delay: 0, type: "post"}, options),
-        url = opts.base + opts.api,
-        tries = opts.tries > 0 ? +opts.tries : 3,
-        def = $.Deferred();
 
-    (function makeRequest() {
-        $.ajax({url: url, dataType: opts.dataType, data: params, type: opts.type})
-            .done(function() {def.resolveWith(this, arguments);})
-            .fail(function() {
-                if (tries--) {
-                    console.log("failed ", params)
-                    return _.delay(makeRequest, opts.delay, this)
-                }
-                def.rejectWith(this, arguments);
-            })
-    }())
-    return def.promise()
-} // function retryAjax
 
-var Header = React.createClass({
-    getInitialState() {
-        return {fields: {}, canMove: false}
-    },
-    componentDidUpdate() {
-        this.props.createSortable(this)
-    },
-    render() {
-        var items = _.map(this.props.fields, (field) => {
-                            return (
-                                <HeaderItem
-                                    key={field._id}
-                                    field={field}
-                                    canMove={this.props.canMove}
-                                    updateDT={this.props.updateDT}/>)
-                        })
-        return (<Row className="header">{items}</Row>);
-    }
-})
 
-var HeaderItem = React.createClass({
-    getInitialState() {
-        return {field: {}, showModal: false}
-    },
-    openFieldEditor() {
-        this.setState({showModal: true})
-    },
-    render() { // <FieldEditor field={field}/>
-        var field = this.props.field,
-            cols = this.props.field.columns ? this.props.field.columns : 2,
-            move = !this.props.canMove
-                ? ""
-                : (<div className="btn-xsmall move" bsSize="xsmall">
-                        <i className="fa fa-bars"></i>
-                    </div>);
-        return (
-            <Col md={cols} data-position={field.sequence} data-id={field._id} className="item">
-                {move}
-                <div className="edit" onClick={this.openFieldEditor}>{field.text}</div>
-                <FieldEditor
-                    showModal={this.state.showModal}
-                    field={this.props.field}
-                    updateDT={this.props.updateDT}/>
-            </Col>
-        )
-    }
-})
 
 var House = React.createClass({
     getInitialState() {
@@ -124,86 +293,9 @@ var HouseItem = React.createClass({
     }
 });
 
-var Control = React.createClass({
-    getInitialState() {
-        return {hidden: {}}
-    },
-    signal(name) {
-        signaller[name].dispatch(..._.toArray(arguments).slice(1))
-    },
-    render() {
-        var hidden = _.map(this.props.hidden, (field, index) => {
-                var click = _.bind(this.signal, this, "headerUpdated", field._id, "show", true)
-                return <MenuItem key={field._id} onClick={click}>{field.text}</MenuItem>
-            }),
-            moveStyle = this.props.canMove ? "success" : "default",
-            curStyle = this.props.currentsOnly ? "success" : "default";
-        return (
-            <Row className="control">
-                <Col md={1} mdOffset={8}>
-                    <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
-                        New Field
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentsSelected")}>
-                        Current Active
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <Button bsStyle={moveStyle} onClick={_.bind(this.signal, this, "moveToggled")}>
-                        Toggle move
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <DropdownButton title="Unhide" id="unhide">
-                    {hidden}
-                    </DropdownButton>
-                </Col>
-            </Row>);
-    }
-})
+
 
 var App = React.createClass({
-    createSortable(ref) {
-        var sortNode = $(ReactDOM.findDOMNode(ref))
-        sortNode = sortNode.sortable({ // handle, placeholder(classname)
-            cursor: "move",
-            items: '.item',
-            handle: ".move",
-            update: _.bind(this.handleSortableUpdate, null, sortNode)
-        });
-    },
-    handleSortableUpdate(sortNode) {
-        var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
-            fields = _.clone(this.state.fields, true);
-
-        ids.forEach((id, index) => {
-            _.find(fields, (item) => {return item._id == id}).sequence = index;
-        });
-
-        sortNode.sortable("cancel");
-        this.setState({fields: _.sortBy(fields, "sequence")});
-        this.updateDB("sequence")
-    },
-    updateDB(fieldname, field) {
-        var data = {"fieldname": fieldname}
-
-        if (field) data.data = [[field._id, field[fieldname]]]
-        else {
-            data.data = _.map(this.state.fields, (field) => {
-                return [field._id, field[fieldname]]
-                })
-        }
-
-        retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
-            .done(function(content){
-                //console.log("worked!", data, arguments)
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-    },
     updateListingDB(id, fieldname, value) {
         var data = {id: id, fieldname: fieldname, value: value}
         retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
@@ -214,7 +306,6 @@ var App = React.createClass({
                 console.log("failed", arguments)
             }.bind(this))
     },
-    /*https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175*/
     updateSomeDistances(opts) {
         var listings = _.chain(opts.listings)
                         .filter(l => !l[opts.fieldId])
@@ -298,18 +389,6 @@ var App = React.createClass({
             })
         console.log(content)
     },
-    loadData() {
-        retryAjax({}, {api: "/getalldata", type: "get"})
-            .done(function(content) {
-                content.redfin = _.find(content.fields, (f) => {return f.redfin == "_id"})._id;
-                this.updateMath(content)
-                this.setState(content) // {fields: [{field info}], listsings: [[data, ...], ...]}
-                $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api)
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-    },
     headerUpdated(fieldId, headerName, value, ...args) { // hideField, setWidth
         var fields = _.clone(this.state.fields),
             index = _.findIndex(fields, (f) => {return f._id == fieldId});
@@ -355,9 +434,6 @@ var App = React.createClass({
     },
     currentsSelected() {
         this.setState({currentsOnly: !this.state.currentsOnly})
-    },
-    componentDidMount() {
-        this.loadData()
     },
     getFieldPos(name) {
         return _.find(this.state.fields, f => f.text== name)._id
@@ -428,25 +504,6 @@ var FieldEditor = React.createClass ({
                   <table>
                       <tbody>
                           <tr>
-                              <td className="title">Visibility</td>
-                              <td className="values">
-                                  <Button bsSize="small" onClick={_.bind(...updateClose, 'show', false)}>
-                                      Hide
-                                  </Button>
-                              </td>
-                          </tr>
-                          <tr>
-                              <td className="title">Columns</td>
-                              <td className="values">
-                                  <Button bsSize="small"
-                                      bsStyle={field.columns == 1 ? "success" : "default"}
-                                      onClick={_.bind(...updateClose, "columns", 1)}>One</Button>
-                                  <Button bsSize="small"
-                                      bsStyle={field.columns == 1 ? "default" : "success"}
-                                      onClick={_.bind(...updateClose, "columns", 2)}>Two</Button>
-                              </td>
-                          </tr>
-                          <tr>
                             <td className="title">Text</td>
                             <td className="values">
                                 <input type="text" defaultValue={field.text}
@@ -495,10 +552,4 @@ var FieldEditor = React.createClass ({
     }
 })
 
-_.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","),
-    function(m) {window[m] = ReactBootstrap[m]})
-
-ReactDOM.render(
-  <App />,
-  document.getElementById('content')
-);
+*/

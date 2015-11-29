@@ -33,10 +33,27 @@
   padding: 2px 0;
 }
 
+.header .edit {
+  float:left
+}
+
+.header .togglevis {
+  float: right;
+  display:none;
+  margin-top:2px;
+  cursor: pointer;
+}
+
+.header .item:hover .togglevis {
+  color: red;
+  display:inline;
+}
+
 .header .edit:hover {
   color: darkgreen;
   cursor: pointer;
   text-decoration: underline;
+
 }
 
 .header div:hover .move {
