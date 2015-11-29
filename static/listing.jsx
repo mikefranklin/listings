@@ -83,33 +83,34 @@ class Header extends React.Component {
 }
 
 class HeaderItem extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = _.clone(props)
+    }
     signal(name) {
         app.signaller[name].dispatch(..._.toArray(arguments).slice(1))
     }
-    // openFieldEditor() {
-    //     this.setState({showModal: true})
-    // },
-    render() { // <FieldEditor field={field}/>
+    openFieldEditor() {
+         this.setState({showModal: true})
+    }
+    render() {
         var header = this.props.header,
             click = _.bind(this.signal, this, "hideHeader", header._id),
-            move = !this.props.canMove
-                ? null
-                : (<div className="btn-xsmall move" bsSize="xsmall">
+            move = (<div className="btn-xsmall move" bsSize="xsmall">
                         <i className="fa fa-bars"></i>
-                    </div>);
-
-             //onClick={this.openFieldEditor}
-            // <FieldEditor
-            //     showModal={this.state.showModal}
-            //     field={this.props.field}
-            //     updateDT={this.props.updateDT}/>
+                    </div>)
         return (
             <Col md={1} data-id={header._id} className="item">
-                {move}
-                <div className="edit" >{header.text}</div>
+                {this.props.canMove ? move : null}
+                <div className="edit" onClick={_.bind(this.openFieldEditor, this)}>
+                    {header.text}
+                </div>
                 <div className="togglevis" onClick={click}>
                     <i className="fa fa-bolt"/>
                 </div>
+                <FieldEditor
+                    showModal={this.state.showModal}
+                    header={this.props.header}/>
             </Col>
         )
     }
@@ -231,6 +232,87 @@ class App extends React.Component {
                     canMove={this.state.canMove}
                     currentActivesOnly={this.state.currentActivesOnly}/>
             </Grid>
+        )
+    }
+}
+
+class FieldEditor extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = _.clone(props)
+    }
+    componentWillReceiveProps(nextProps) {
+        var state = _.clone(this.state)
+        state.showModal = nextProps.showModal
+        this.setState(state)
+    }
+    updateState(updater) {
+        var state = _.clone(this.state);
+        updater(state)
+        this.setState(state)
+        return state
+    }
+    updateField(name, event) {
+        var s = _.clone(this.state)
+        s[name] = event.target.value
+        this.setState(s)
+    }
+    signal(name, close, ...args) {
+        // signaller[name].dispatch(...args)
+        // if (close) this.close()
+    }
+    render() {
+        var header = this.state.header,
+            id = header._id,
+            //updateClose = [this.signal, this, "headerUpdated", true, fieldId],
+            props = {update: _.bind(this.updateField, this), header: header},
+            close = _.bind(this.updateState, this, (s) => s.showModal = false);
+        return (
+            <Modal show={this.state.showModal} onHide={close}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{header.text}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Grid fluid={true}>
+                        <Field title="Text" {...props}/>
+                        <Field title="Bucket Size" {...props} text="* = use disctinct values"/>
+                        <Row>
+                            <Col md={3} className="title">Type</Col>
+                            <Col md={8} className="values">
+                                <ButtonGroup>
+                                    <Button>Unadorned</Button>
+                                    <Button>Math</Button>
+                                    <Button>DistanceTo</Button>
+                                </ButtonGroup>
+                            </Col>
+                        </Row>
+                        <Field title="Math" {...props}/>
+                        <Field title="Distance To" {...props}/>
+                    </Grid>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button onClick={close}>Close</Button>
+                </Modal.Footer>
+            </Modal>
+        )
+    }
+}
+
+class Field extends React.Component {
+    render() {
+        if (!this.props) return false;
+        var fieldname = (this.props.title.substr(0, 1).toLowerCase()
+                        + this.props.title.substr(1).replace(/\s+/g, "")),
+            desc = (this.props.text ? <div>{this.props.text}</div> : null)
+        return (
+            <Row>
+                <Col md={3} className="title">{this.props.title}</Col>
+                <Col md={8} className="values">
+                    <input type="text" defaultValue={this.props.header[fieldname]}
+                            onChange={_.bind(this.props.update, null, fieldname)}/>
+                    {desc}
+                </Col>
+            </Row>
         )
     }
 }
@@ -467,89 +549,5 @@ var App = React.createClass({
     }
 })
 
-var FieldEditor = React.createClass ({
-    getInitialState() {
-        return {showModal: false, text: "", bucketSize: "", math: "", distanceTo: "", field: {}}
-    },
-    close() {
-        var state = _.clone(this.state)
-        state.showModal = false
-        this.setState(state);
-    },
-    componentWillReceiveProps(nextProps) {
-        var state = _.clone(nextProps)
-        this.setState(state)
-    },
-    update(name, event) {
-        var s = _.clone(this.state)
-        s[name] = event.target.value
-        this.setState(s)
-    },
-    signal(name, close, ...args) {
-        signaller[name].dispatch(...args)
-        if (close) this.close()
-    },
-    render() {
-        var field = this.state.field,
-            fieldId = field._id,
-            updateClose = [this.signal, this, "headerUpdated", true, fieldId],
-            e = function() {};
-            //updateDT = this.props.updateDT ? _.bind(this.props.updateDT, null, fieldId) : "";
-        return (
-            <Modal show={this.state.showModal} onHide={this.close}>
-              <Modal.Header closeButton>
-                <Modal.Title>{field.text}</Modal.Title>
-              </Modal.Header>
-              <Modal.Body>
-                  <table>
-                      <tbody>
-                          <tr>
-                            <td className="title">Text</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.text}
-                                    onChange={_.bind(this.update, this, "text")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "text", this.state.text)}>Save</Button>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">bucket size</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.bucketSize || 0}
-                                    onChange={_.bind(this.update, this, "bucketSize")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "bucketSize", this.state.bucketSize)}>Save</Button>
-                                <br/>* = distinct
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">Math</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.math || ""}
-                                    onChange={_.bind(this.update, this, "math")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "math", this.state.math)}>Save</Button>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">Distance to</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.distanceTo || ""}
-                                    onChange={_.bind(this.update, this, "distanceTo")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "distanceTo", this.state.distanceTo,
-                                        _.bind(this.props.updateDT || e, null, fieldId, this.state.distanceTo))}>Save</Button>
-                            </td>
-                          </tr>
-                      </tbody>
-                  </table>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button onClick={this.close}>Close</Button>
-              </Modal.Footer>
-            </Modal>
-        )
-    }
-})
 
 */

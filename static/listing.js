@@ -8,6 +8,8 @@ https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
 
 ;
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
 var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
@@ -125,10 +127,13 @@ var Header = (function (_React$Component) {
 var HeaderItem = (function (_React$Component2) {
     _inherits(HeaderItem, _React$Component2);
 
-    function HeaderItem() {
+    function HeaderItem(props) {
         _classCallCheck(this, HeaderItem);
 
-        return _possibleConstructorReturn(this, Object.getPrototypeOf(HeaderItem).apply(this, arguments));
+        var _this3 = _possibleConstructorReturn(this, Object.getPrototypeOf(HeaderItem).call(this, props));
+
+        _this3.state = _.clone(props);
+        return _this3;
     }
 
     _createClass(HeaderItem, [{
@@ -138,41 +143,38 @@ var HeaderItem = (function (_React$Component2) {
 
             (_app$signaller$name = app.signaller[name]).dispatch.apply(_app$signaller$name, _toConsumableArray(_.toArray(arguments).slice(1)));
         }
-        // openFieldEditor() {
-        //     this.setState({showModal: true})
-        // },
-
+    }, {
+        key: "openFieldEditor",
+        value: function openFieldEditor() {
+            this.setState({ showModal: true });
+        }
     }, {
         key: "render",
         value: function render() {
-            // <FieldEditor field={field}/>
             var header = this.props.header,
                 click = _.bind(this.signal, this, "hideHeader", header._id),
-                move = !this.props.canMove ? null : React.createElement(
+                move = React.createElement(
                 "div",
                 { className: "btn-xsmall move", bsSize: "xsmall" },
                 React.createElement("i", { className: "fa fa-bars" })
             );
-
-            //onClick={this.openFieldEditor}
-            // <FieldEditor
-            //     showModal={this.state.showModal}
-            //     field={this.props.field}
-            //     updateDT={this.props.updateDT}/>
             return React.createElement(
                 Col,
                 { md: 1, "data-id": header._id, className: "item" },
-                move,
+                this.props.canMove ? move : null,
                 React.createElement(
                     "div",
-                    { className: "edit" },
+                    { className: "edit", onClick: _.bind(this.openFieldEditor, this) },
                     header.text
                 ),
                 React.createElement(
                     "div",
                     { className: "togglevis", onClick: click },
                     React.createElement("i", { className: "fa fa-bolt" })
-                )
+                ),
+                React.createElement(FieldEditor, {
+                    showModal: this.state.showModal,
+                    header: this.props.header })
             );
         }
     }]);
@@ -384,6 +386,170 @@ var App = (function (_React$Component4) {
     }]);
 
     return App;
+})(React.Component);
+
+var FieldEditor = (function (_React$Component5) {
+    _inherits(FieldEditor, _React$Component5);
+
+    function FieldEditor(props) {
+        _classCallCheck(this, FieldEditor);
+
+        var _this7 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+
+        _this7.state = _.clone(props);
+        return _this7;
+    }
+
+    _createClass(FieldEditor, [{
+        key: "componentWillReceiveProps",
+        value: function componentWillReceiveProps(nextProps) {
+            var state = _.clone(this.state);
+            state.showModal = nextProps.showModal;
+            this.setState(state);
+        }
+    }, {
+        key: "updateState",
+        value: function updateState(updater) {
+            var state = _.clone(this.state);
+            updater(state);
+            this.setState(state);
+            return state;
+        }
+    }, {
+        key: "updateField",
+        value: function updateField(name, event) {
+            var s = _.clone(this.state);
+            s[name] = event.target.value;
+            this.setState(s);
+        }
+    }, {
+        key: "signal",
+        value: function signal(name, close) {
+            // signaller[name].dispatch(...args)
+            // if (close) this.close()
+        }
+    }, {
+        key: "render",
+        value: function render() {
+            var header = this.state.header,
+                id = header._id,
+
+            //updateClose = [this.signal, this, "headerUpdated", true, fieldId],
+            props = { update: _.bind(this.updateField, this), header: header },
+                close = _.bind(this.updateState, this, function (s) {
+                return s.showModal = false;
+            });
+            return React.createElement(
+                Modal,
+                { show: this.state.showModal, onHide: close },
+                React.createElement(
+                    Modal.Header,
+                    { closeButton: true },
+                    React.createElement(
+                        Modal.Title,
+                        null,
+                        header.text
+                    )
+                ),
+                React.createElement(
+                    Modal.Body,
+                    null,
+                    React.createElement(
+                        Grid,
+                        { fluid: true },
+                        React.createElement(Field, _extends({ title: "Text" }, props)),
+                        React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use disctinct values" })),
+                        React.createElement(
+                            Row,
+                            null,
+                            React.createElement(
+                                Col,
+                                { md: 3, className: "title" },
+                                "Type"
+                            ),
+                            React.createElement(
+                                Col,
+                                { md: 8, className: "values" },
+                                React.createElement(
+                                    ButtonGroup,
+                                    null,
+                                    React.createElement(
+                                        Button,
+                                        null,
+                                        "Unadorned"
+                                    ),
+                                    React.createElement(
+                                        Button,
+                                        null,
+                                        "Math"
+                                    ),
+                                    React.createElement(
+                                        Button,
+                                        null,
+                                        "DistanceTo"
+                                    )
+                                )
+                            )
+                        ),
+                        React.createElement(Field, _extends({ title: "Math" }, props)),
+                        React.createElement(Field, _extends({ title: "Distance To" }, props))
+                    )
+                ),
+                React.createElement(
+                    Modal.Footer,
+                    null,
+                    React.createElement(
+                        Button,
+                        { onClick: close },
+                        "Close"
+                    )
+                )
+            );
+        }
+    }]);
+
+    return FieldEditor;
+})(React.Component);
+
+var Field = (function (_React$Component6) {
+    _inherits(Field, _React$Component6);
+
+    function Field() {
+        _classCallCheck(this, Field);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(Field).apply(this, arguments));
+    }
+
+    _createClass(Field, [{
+        key: "render",
+        value: function render() {
+            if (!this.props) return false;
+            var fieldname = this.props.title.substr(0, 1).toLowerCase() + this.props.title.substr(1).replace(/\s+/g, ""),
+                desc = this.props.text ? React.createElement(
+                "div",
+                null,
+                this.props.text
+            ) : null;
+            return React.createElement(
+                Row,
+                null,
+                React.createElement(
+                    Col,
+                    { md: 3, className: "title" },
+                    this.props.title
+                ),
+                React.createElement(
+                    Col,
+                    { md: 8, className: "values" },
+                    React.createElement("input", { type: "text", defaultValue: this.props.header[fieldname],
+                        onChange: _.bind(this.props.update, null, fieldname) }),
+                    desc
+                )
+            );
+        }
+    }]);
+
+    return Field;
 })(React.Component);
 
 /*
@@ -617,90 +783,6 @@ var App = React.createClass({
     }
 })
 
-var FieldEditor = React.createClass ({
-    getInitialState() {
-        return {showModal: false, text: "", bucketSize: "", math: "", distanceTo: "", field: {}}
-    },
-    close() {
-        var state = _.clone(this.state)
-        state.showModal = false
-        this.setState(state);
-    },
-    componentWillReceiveProps(nextProps) {
-        var state = _.clone(nextProps)
-        this.setState(state)
-    },
-    update(name, event) {
-        var s = _.clone(this.state)
-        s[name] = event.target.value
-        this.setState(s)
-    },
-    signal(name, close, ...args) {
-        signaller[name].dispatch(...args)
-        if (close) this.close()
-    },
-    render() {
-        var field = this.state.field,
-            fieldId = field._id,
-            updateClose = [this.signal, this, "headerUpdated", true, fieldId],
-            e = function() {};
-            //updateDT = this.props.updateDT ? _.bind(this.props.updateDT, null, fieldId) : "";
-        return (
-            <Modal show={this.state.showModal} onHide={this.close}>
-              <Modal.Header closeButton>
-                <Modal.Title>{field.text}</Modal.Title>
-              </Modal.Header>
-              <Modal.Body>
-                  <table>
-                      <tbody>
-                          <tr>
-                            <td className="title">Text</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.text}
-                                    onChange={_.bind(this.update, this, "text")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "text", this.state.text)}>Save</Button>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">bucket size</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.bucketSize || 0}
-                                    onChange={_.bind(this.update, this, "bucketSize")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "bucketSize", this.state.bucketSize)}>Save</Button>
-                                <br/>* = distinct
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">Math</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.math || ""}
-                                    onChange={_.bind(this.update, this, "math")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "math", this.state.math)}>Save</Button>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="title">Distance to</td>
-                            <td className="values">
-                                <input type="text" defaultValue={field.distanceTo || ""}
-                                    onChange={_.bind(this.update, this, "distanceTo")}/>
-                                <Button bsSize="small" bsStyle="primary"
-                                    onClick={_.bind(...updateClose, "distanceTo", this.state.distanceTo,
-                                        _.bind(this.props.updateDT || e, null, fieldId, this.state.distanceTo))}>Save</Button>
-                            </td>
-                          </tr>
-                      </tbody>
-                  </table>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button onClick={this.close}>Close</Button>
-              </Modal.Footer>
-            </Modal>
-        )
-    }
-})
 
 */
 //# sourceMappingURL=/Users/michaelfranklin/Developer/personal/python/house/static/listing.js.map
