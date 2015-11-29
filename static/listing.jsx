@@ -14,7 +14,8 @@ class ListingApp {
             headersSorted: new signals.Signal(),
             moveToggled: new signals.Signal(),
             headerUpdated: new signals.Signal(),
-            toggleVisibility: new signals.Signal()
+            hideHeader: new signals.Signal(),
+            showHeader: new signals.Signal()
         }
         return this
     }
@@ -90,7 +91,7 @@ class HeaderItem extends React.Component {
     // },
     render() { // <FieldEditor field={field}/>
         var header = this.props.header,
-            click = _.bind(this.signal, this, "toggleVisibility", header._id, false),
+            click = _.bind(this.signal, this, "hideHeader", header._id),
             move = !this.props.canMove
                 ? null
                 : (<div className="btn-xsmall move" bsSize="xsmall">
@@ -123,7 +124,7 @@ class Control extends React.Component {
         var moveStyle = this.props.canMove ? "success" : "default",
             curStyle = this.props.currentActivesOnly ? "success" : "default",
             hidden = _.map(this.props.hidden, (header) => {
-                var select = _.bind(this.signal, this, "toggleVisibility", header._id, true)
+                var select = _.bind(this.signal, this, "showHeader", header._id)
                 return <MenuItem key={header._id} onSelect={select}>{header.text}</MenuItem>
             });
         return (
@@ -134,7 +135,7 @@ class Control extends React.Component {
                     </Button>
                 </Col>
                 <Col md={1}>
-                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentsActivesSelected")}>
+                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentActivesSelected")}>
                         Current Active
                     </Button>
                 </Col>
@@ -173,7 +174,14 @@ class App extends React.Component {
         app.signaller.headerUpdated.add((id, redfin, value) =>
             this.updateState(s => s.headers[id][redfin] = value,
                             () => this.saveHeaders(null, redfin, id, value)))
-        app.signaller.toggleVisibility.add((id, show) => this.toggleVisibility(id, show))
+        app.signaller.showHeader.add((id) =>
+            this.updateState(s => this.toggleHeaderVisibility(s.hidden, s.headers, id, true),
+                            () => this.saveHeaders(null, "show", id, true))
+        )
+        app.signaller.hideHeader.add((id) =>
+            this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, false),
+                            () => this.saveHeaders(null, "show", id, false))
+        )
     }
     updateState(updater, save) {
         var state = _.clone(this.state);
@@ -181,6 +189,11 @@ class App extends React.Component {
         this.setState(state)
         if (save) save()
         return state
+    }
+    toggleHeaderVisibility(source, target, id, show) {
+        return  _.sortBy(target.push(
+            _.extend(source.splice(_.findIndex(source, h => h._id == id), 1)[0], {show: show}
+        )), "sequence")
     }
     reorderHeaders(sortNode) {
         var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
@@ -194,20 +207,7 @@ class App extends React.Component {
         this.setState(state);
         this.saveHeaders(state.headers, "sequence")
     }
-    toggleVisibility(id, show) {
-        var state = _.clone(this.state),
-            opts = [state.headers, state.hidden],
-            source = opts[+show],
-            target = opts[+!show];
 
-        target = _.sortBy(target.push(
-            _.extend(source.splice(_.findIndex(source, h => h._id == id), 1)[0], {show: show}
-        )), "sequence")
-
-        this.setState(state)
-
-        this.saveHeaders(null, "show", id, show)
-    }
     saveHeaders(headers, redfin, id, value) {
         var data = {redfin: redfin,
                     data: headers ? _.map(headers, header => [header._id, header[redfin]])

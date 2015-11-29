@@ -32,7 +32,8 @@ var ListingApp = (function () {
             headersSorted: new signals.Signal(),
             moveToggled: new signals.Signal(),
             headerUpdated: new signals.Signal(),
-            toggleVisibility: new signals.Signal()
+            hideHeader: new signals.Signal(),
+            showHeader: new signals.Signal()
         };
         return this;
     }
@@ -146,7 +147,7 @@ var HeaderItem = (function (_React$Component2) {
         value: function render() {
             // <FieldEditor field={field}/>
             var header = this.props.header,
-                click = _.bind(this.signal, this, "toggleVisibility", header._id, false),
+                click = _.bind(this.signal, this, "hideHeader", header._id),
                 move = !this.props.canMove ? null : React.createElement(
                 "div",
                 { className: "btn-xsmall move", bsSize: "xsmall" },
@@ -204,7 +205,7 @@ var Control = (function (_React$Component3) {
             var moveStyle = this.props.canMove ? "success" : "default",
                 curStyle = this.props.currentActivesOnly ? "success" : "default",
                 hidden = _.map(this.props.hidden, function (header) {
-                var select = _.bind(_this5.signal, _this5, "toggleVisibility", header._id, true);
+                var select = _.bind(_this5.signal, _this5, "showHeader", header._id);
                 return React.createElement(
                     MenuItem,
                     { key: header._id, onSelect: select },
@@ -228,7 +229,7 @@ var Control = (function (_React$Component3) {
                     { md: 1 },
                     React.createElement(
                         Button,
-                        { bsStyle: curStyle, onClick: _.bind(this.signal, this, "currentsActivesSelected") },
+                        { bsStyle: curStyle, onClick: _.bind(this.signal, this, "currentActivesSelected") },
                         "Current Active"
                     )
                 ),
@@ -303,8 +304,19 @@ var App = (function (_React$Component4) {
                 return _this6.saveHeaders(null, redfin, id, value);
             });
         });
-        app.signaller.toggleVisibility.add(function (id, show) {
-            return _this6.toggleVisibility(id, show);
+        app.signaller.showHeader.add(function (id) {
+            return _this6.updateState(function (s) {
+                return _this6.toggleHeaderVisibility(s.hidden, s.headers, id, true);
+            }, function () {
+                return _this6.saveHeaders(null, "show", id, true);
+            });
+        });
+        app.signaller.hideHeader.add(function (id) {
+            return _this6.updateState(function (s) {
+                return _this6.toggleHeaderVisibility(s.headers, s.hidden, id, false);
+            }, function () {
+                return _this6.saveHeaders(null, "show", id, false);
+            });
         });
         return _this6;
     }
@@ -317,6 +329,13 @@ var App = (function (_React$Component4) {
             this.setState(state);
             if (save) save();
             return state;
+        }
+    }, {
+        key: "toggleHeaderVisibility",
+        value: function toggleHeaderVisibility(source, target, id, show) {
+            return _.sortBy(target.push(_.extend(source.splice(_.findIndex(source, function (h) {
+                return h._id == id;
+            }), 1)[0], { show: show })), "sequence");
         }
     }, {
         key: "reorderHeaders",
@@ -333,22 +352,6 @@ var App = (function (_React$Component4) {
             sortNode.sortable("cancel");
             this.setState(state);
             this.saveHeaders(state.headers, "sequence");
-        }
-    }, {
-        key: "toggleVisibility",
-        value: function toggleVisibility(id, show) {
-            var state = _.clone(this.state),
-                opts = [state.headers, state.hidden],
-                source = opts[+show],
-                target = opts[+!show];
-
-            target = _.sortBy(target.push(_.extend(source.splice(_.findIndex(source, function (h) {
-                return h._id == id;
-            }), 1)[0], { show: show })), "sequence");
-
-            this.setState(state);
-
-            this.saveHeaders(null, "show", id, show);
         }
     }, {
         key: "saveHeaders",
