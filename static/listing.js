@@ -33,9 +33,7 @@ var ListingApp = (function () {
         this.signaller = {
             headersSorted: new signals.Signal(),
             moveToggled: new signals.Signal(),
-            headerUpdated: new signals.Signal(),
-            hideHeader: new signals.Signal(),
-            showHeader: new signals.Signal()
+            headerUpdated: new signals.Signal()
         };
         return this;
     }
@@ -106,9 +104,10 @@ var Header = (function (_React$Component) {
         value: function render() {
             var _this2 = this;
 
-            // updateDT={this.props.updateDT}/>)
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(HeaderItem, {
+                    save: _this2.props.save,
+                    hide: _this2.props.hide,
                     canMove: _this2.props.canMove,
                     key: header._id,
                     header: header });
@@ -137,22 +136,33 @@ var HeaderItem = (function (_React$Component2) {
     }
 
     _createClass(HeaderItem, [{
-        key: "signal",
-        value: function signal(name) {
-            var _app$signaller$name;
-
-            (_app$signaller$name = app.signaller[name]).dispatch.apply(_app$signaller$name, _toConsumableArray(_.toArray(arguments).slice(1)));
+        key: "updateState",
+        value: function updateState(updater, save) {
+            var state = _.clone(this.state);
+            updater(state);
+            this.setState(state);
+            if (save) save();
+            return state;
         }
     }, {
         key: "openFieldEditor",
         value: function openFieldEditor() {
-            this.setState({ showModal: true });
+            this.updateState(function (s) {
+                return s.showModal = true;
+            });
+        }
+    }, {
+        key: "closeFieldEditor",
+        value: function closeFieldEditor(header) {
+            this.updateState(function (s) {
+                return _.extend(s, header || {}, { showModal: false });
+            });
+            if (header) this.props.save(_.omit(this.state.header, "showModal"));
         }
     }, {
         key: "render",
         value: function render() {
             var header = this.props.header,
-                click = _.bind(this.signal, this, "hideHeader", header._id),
                 move = React.createElement(
                 "div",
                 { className: "btn-xsmall move", bsSize: "xsmall" },
@@ -169,12 +179,14 @@ var HeaderItem = (function (_React$Component2) {
                 ),
                 React.createElement(
                     "div",
-                    { className: "togglevis", onClick: click },
+                    { className: "togglevis", onClick: _.bind(this.props.hide, null, header._id) },
                     React.createElement("i", { className: "fa fa-bolt" })
                 ),
                 React.createElement(FieldEditor, {
                     showModal: this.state.showModal,
-                    header: this.props.header })
+                    header: this.state.header,
+                    update: _.bind(this.updateState, this),
+                    close: _.bind(this.closeFieldEditor, this) })
             );
         }
     }]);
@@ -194,9 +206,9 @@ var Control = (function (_React$Component3) {
     _createClass(Control, [{
         key: "signal",
         value: function signal(name) {
-            var _app$signaller$name2;
+            var _app$signaller$name;
 
-            (_app$signaller$name2 = app.signaller[name]).dispatch.apply(_app$signaller$name2, _toConsumableArray(_.toArray(arguments).slice(1)));
+            (_app$signaller$name = app.signaller[name]).dispatch.apply(_app$signaller$name, _toConsumableArray(_.toArray(arguments).slice(1)));
         }
     }, {
         key: "render",
@@ -207,10 +219,11 @@ var Control = (function (_React$Component3) {
             var moveStyle = this.props.canMove ? "success" : "default",
                 curStyle = this.props.currentActivesOnly ? "success" : "default",
                 hidden = _.map(this.props.hidden, function (header) {
-                var select = _.bind(_this5.signal, _this5, "showHeader", header._id);
                 return React.createElement(
                     MenuItem,
-                    { key: header._id, onSelect: select },
+                    {
+                        key: header._id,
+                        onSelect: _.bind(_this5.props.showHeader, null, header._id) },
                     header.text
                 );
             });
@@ -303,27 +316,49 @@ var App = (function (_React$Component4) {
             return _this6.updateState(function (s) {
                 return s.headers[id][redfin] = value;
             }, function () {
-                return _this6.saveHeaders(null, redfin, id, value);
+                return _this6.saveHeaderValue(null, redfin, id, value);
             });
         });
-        app.signaller.showHeader.add(function (id) {
-            return _this6.updateState(function (s) {
-                return _this6.toggleHeaderVisibility(s.hidden, s.headers, id, true);
-            }, function () {
-                return _this6.saveHeaders(null, "show", id, true);
-            });
-        });
-        app.signaller.hideHeader.add(function (id) {
-            return _this6.updateState(function (s) {
-                return _this6.toggleHeaderVisibility(s.headers, s.hidden, id, false);
-            }, function () {
-                return _this6.saveHeaders(null, "show", id, false);
-            });
-        });
+
         return _this6;
     }
 
     _createClass(App, [{
+        key: "showHeader",
+        value: function showHeader(id) {
+            var _this7 = this;
+
+            this.updateState(function (s) {
+                return _this7.toggleHeaderVisibility(s.hidden, s.headers, id, true);
+            }, function () {
+                return _this7.saveHeaderValue(null, "show", id, true);
+            });
+        }
+    }, {
+        key: "hideHeader",
+        value: function hideHeader(id) {
+            var _this8 = this;
+
+            this.updateState(function (s) {
+                return _this8.toggleHeaderVisibility(s.headers, s.hidden, id, true);
+            }, function () {
+                return _this8.saveHeaderValue(null, "show", id, false);
+            });
+        }
+    }, {
+        key: "saveHeader",
+        value: function saveHeader(header) {
+            var _this9 = this;
+
+            this.updateState(function (s) {
+                return s.headers[_.findIndex(s.headers, function (h) {
+                    return h._id == header._id;
+                })] = header;
+            }, function () {
+                return _this9.saveHeader(header);
+            });
+        }
+    }, {
         key: "updateState",
         value: function updateState(updater, save) {
             var state = _.clone(this.state);
@@ -353,16 +388,25 @@ var App = (function (_React$Component4) {
             state.headers = _.sortBy(state.headers, "sequence");
             sortNode.sortable("cancel");
             this.setState(state);
-            this.saveHeaders(state.headers, "sequence");
+            this.saveHeaderValue(state.headers, "sequence");
         }
     }, {
-        key: "saveHeaders",
-        value: function saveHeaders(headers, redfin, id, value) {
+        key: "saveHeader",
+        value: function saveHeader(header) {
+            app.retryAjax(JSON.stringify(header), { api: "/saveheader", type: "post" }).done((function (content) {
+                console.log("saving header worked!", header, arguments);
+            }).bind(this)).fail((function () {
+                console.log(arguments);
+            }).bind(this));
+        }
+    }, {
+        key: "saveHeaderValue",
+        value: function saveHeaderValue(headers, redfin, id, value) {
             var data = { redfin: redfin,
                 data: headers ? _.map(headers, function (header) {
                     return [header._id, header[redfin]];
                 }) : [[id, value]] };
-            app.retryAjax(JSON.stringify(data), { api: "/saveheaderdata", type: "post" }).done((function (content) {
+            app.retryAjax(JSON.stringify(data), { api: "/saveheadervalue", type: "post" }).done((function (content) {
                 console.log("saving worked!", data, arguments);
             }).bind(this)).fail((function () {
                 console.log(arguments);
@@ -376,10 +420,13 @@ var App = (function (_React$Component4) {
                 { fluid: true },
                 React.createElement(Header, {
                     headers: this.state.headers,
-                    canMove: this.state.canMove }),
+                    canMove: this.state.canMove,
+                    save: _.bind(this.saveHeader, this),
+                    hide: _.bind(this.hideHeader, this) }),
                 React.createElement(Control, {
                     hidden: this.state.hidden,
                     canMove: this.state.canMove,
+                    showHeader: _.bind(this.showHeader, this),
                     currentActivesOnly: this.state.currentActivesOnly })
             );
         }
@@ -394,54 +441,33 @@ var FieldEditor = (function (_React$Component5) {
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this7 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this10 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this7.state = _.clone(props);
-        return _this7;
+        _this10.state = _.clone(props);
+        return _this10;
     }
 
     _createClass(FieldEditor, [{
         key: "componentWillReceiveProps",
         value: function componentWillReceiveProps(nextProps) {
-            var state = _.clone(this.state);
-            state.showModal = nextProps.showModal;
-            this.setState(state);
+            this.setState(_.clone(nextProps));
         }
     }, {
-        key: "updateState",
-        value: function updateState(updater) {
-            var state = _.clone(this.state);
-            updater(state);
-            this.setState(state);
-            return state;
-        }
-    }, {
-        key: "updateField",
-        value: function updateField(name, event) {
-            var s = _.clone(this.state);
-            s[name] = event.target.value;
-            this.setState(s);
-        }
-    }, {
-        key: "signal",
-        value: function signal(name, close) {
-            // signaller[name].dispatch(...args)
-            // if (close) this.close()
+        key: "updateFieldValue",
+        value: function updateFieldValue(name, event) {
+            this.props.update(function (s) {
+                return s.header[name] = event.target.value;
+            });
         }
     }, {
         key: "render",
         value: function render() {
             var header = this.state.header,
                 id = header._id,
-
-            //updateClose = [this.signal, this, "headerUpdated", true, fieldId],
-            props = { update: _.bind(this.updateField, this), header: header },
-                close = _.bind(this.updateState, this, function (s) {
-                return s.showModal = false;
-            });
+                props = { update: _.bind(this.updateFieldValue, this), header: header };
             return React.createElement(
                 Modal,
-                { show: this.state.showModal, onHide: close },
+                { show: this.state.showModal, onHide: _.bind(this.props.close, this, null) },
                 React.createElement(
                     Modal.Header,
                     { closeButton: true },
@@ -458,41 +484,9 @@ var FieldEditor = (function (_React$Component5) {
                         Grid,
                         { fluid: true },
                         React.createElement(Field, _extends({ title: "Text" }, props)),
-                        React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use disctinct values" })),
-                        React.createElement(
-                            Row,
-                            null,
-                            React.createElement(
-                                Col,
-                                { md: 3, className: "title" },
-                                "Type"
-                            ),
-                            React.createElement(
-                                Col,
-                                { md: 8, className: "values" },
-                                React.createElement(
-                                    ButtonGroup,
-                                    null,
-                                    React.createElement(
-                                        Button,
-                                        null,
-                                        "Unadorned"
-                                    ),
-                                    React.createElement(
-                                        Button,
-                                        null,
-                                        "Math"
-                                    ),
-                                    React.createElement(
-                                        Button,
-                                        null,
-                                        "DistanceTo"
-                                    )
-                                )
-                            )
-                        ),
-                        React.createElement(Field, _extends({ title: "Math" }, props)),
-                        React.createElement(Field, _extends({ title: "Distance To" }, props))
+                        React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use distinct values" })),
+                        React.createElement(Field, _extends({ title: "» Math" }, props)),
+                        React.createElement(Field, _extends({ title: "» Distance To" }, props))
                     )
                 ),
                 React.createElement(
@@ -500,7 +494,12 @@ var FieldEditor = (function (_React$Component5) {
                     null,
                     React.createElement(
                         Button,
-                        { onClick: close },
+                        { onClick: _.bind(this.props.close, this, this.state.header) },
+                        "Save & Close"
+                    ),
+                    React.createElement(
+                        Button,
+                        { onClick: _.bind(this.props.close, this, null) },
                         "Close"
                     )
                 )

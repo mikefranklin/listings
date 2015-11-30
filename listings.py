@@ -110,8 +110,8 @@ def save_listing_data():
     return json.dumps(list(res))
 
 
-@app.route("/saveheaderdata", methods=["PUT", "POST"])
-def save_header_data():
+@app.route("/saveheadervalue", methods=["PUT", "POST"])
+def save_header_value():
     data = request.get_json(force=True)  # fieldname, data=[[_id, value]...
     update = lambda value: {"_default." + data["redfin"]: value}
 
@@ -130,6 +130,16 @@ def save_new_field():
     res = mongo.db.headers.insert_one(field)
 
     return json.dumps([list(res), field])
+
+
+@app.route("/saveheader", methods=["PUT", "POST"])
+def save_header():
+    data = request.get_json(force=True)
+    field = {"_id": data.pop("_id"), "redfin": data.pop("redfin"), "_default": data}
+
+    res = mongo.db.headers.update({"_id": field["_id"]}, {"$set": field})
+
+    return json.dumps(list(res))
 
 
 @app.route('/import')

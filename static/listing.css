@@ -30,7 +30,6 @@
 
 .control {
   background-color: #eef;
-  padding: 2px 0;
 }
 
 .header .edit {
@@ -61,12 +60,12 @@
   cursor: pointer
 }
 
-.titles,
+.title,
 .values {
-  padding: 4px
+  padding: 2px 0
 }
 
-.titles {
+.title {
   margin-top: 8px;
 }
 

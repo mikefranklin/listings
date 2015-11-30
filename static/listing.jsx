@@ -13,9 +13,7 @@ class ListingApp {
         this.signaller = {
             headersSorted: new signals.Signal(),
             moveToggled: new signals.Signal(),
-            headerUpdated: new signals.Signal(),
-            hideHeader: new signals.Signal(),
-            showHeader: new signals.Signal()
+            headerUpdated: new signals.Signal()
         }
         return this
     }
@@ -70,14 +68,13 @@ class Header extends React.Component {
         })
     }
     render() {
-        // updateDT={this.props.updateDT}/>)
         var items = _.map(this.props.headers, (header) => {
-                            return (
-                                <HeaderItem
-                                    canMove={this.props.canMove}
-                                    key={header._id}
-                                    header={header}/>)
-                            })
+                            return (<HeaderItem
+                                        save={this.props.save}
+                                        hide={this.props.hide}
+                                        canMove={this.props.canMove}
+                                        key={header._id}
+                                        header={header}/>)})
         return (<Row className="header">{items}</Row>);
     }
 }
@@ -87,15 +84,22 @@ class HeaderItem extends React.Component {
         super(props)
         this.state = _.clone(props)
     }
-    signal(name) {
-        app.signaller[name].dispatch(..._.toArray(arguments).slice(1))
+    updateState(updater, save) {
+        var state = _.clone(this.state);
+        updater(state)
+        this.setState(state)
+        if (save) save()
+        return state
     }
     openFieldEditor() {
-         this.setState({showModal: true})
+        this.updateState(s => s.showModal = true)
+    }
+    closeFieldEditor(header) {
+        this.updateState(s => _.extend(s, header || {}, {showModal: false}))
+        if (header) this.props.save(_.omit(this.state.header, "showModal"))
     }
     render() {
         var header = this.props.header,
-            click = _.bind(this.signal, this, "hideHeader", header._id),
             move = (<div className="btn-xsmall move" bsSize="xsmall">
                         <i className="fa fa-bars"></i>
                     </div>)
@@ -105,12 +109,14 @@ class HeaderItem extends React.Component {
                 <div className="edit" onClick={_.bind(this.openFieldEditor, this)}>
                     {header.text}
                 </div>
-                <div className="togglevis" onClick={click}>
+                <div className="togglevis" onClick={_.bind(this.props.hide, null, header._id)}>
                     <i className="fa fa-bolt"/>
                 </div>
                 <FieldEditor
                     showModal={this.state.showModal}
-                    header={this.props.header}/>
+                    header={this.state.header}
+                    update={_.bind(this.updateState, this)}
+                    close={_.bind(this.closeFieldEditor, this)}/>
             </Col>
         )
     }
@@ -125,8 +131,11 @@ class Control extends React.Component {
         var moveStyle = this.props.canMove ? "success" : "default",
             curStyle = this.props.currentActivesOnly ? "success" : "default",
             hidden = _.map(this.props.hidden, (header) => {
-                var select = _.bind(this.signal, this, "showHeader", header._id)
-                return <MenuItem key={header._id} onSelect={select}>{header.text}</MenuItem>
+                return (<MenuItem
+                            key={header._id}
+                            onSelect={_.bind(this.props.showHeader, null, header._id)}>
+                            {header.text}
+                        </MenuItem>)
             });
         return (
             <Row className="control">
@@ -174,15 +183,21 @@ class App extends React.Component {
         app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
         app.signaller.headerUpdated.add((id, redfin, value) =>
             this.updateState(s => s.headers[id][redfin] = value,
-                            () => this.saveHeaders(null, redfin, id, value)))
-        app.signaller.showHeader.add((id) =>
-            this.updateState(s => this.toggleHeaderVisibility(s.hidden, s.headers, id, true),
-                            () => this.saveHeaders(null, "show", id, true))
-        )
-        app.signaller.hideHeader.add((id) =>
-            this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, false),
-                            () => this.saveHeaders(null, "show", id, false))
-        )
+                            () => this.saveHeaderValue(null, redfin, id, value)))
+
+    }
+    showHeader(id) {
+        this.updateState(s => this.toggleHeaderVisibility(s.hidden, s.headers, id, true),
+                () => this.saveHeaderValue(null, "show", id, true))
+    }
+    hideHeader(id) {
+        this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, true),
+                        () => this.saveHeaderValue(null, "show", id, false))
+    }
+
+    saveHeader(header) {
+        this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
+                        () => this.saveHeader(header))
     }
     updateState(updater, save) {
         var state = _.clone(this.state);
@@ -206,14 +221,23 @@ class App extends React.Component {
         state.headers = _.sortBy(state.headers, "sequence")
         sortNode.sortable("cancel");
         this.setState(state);
-        this.saveHeaders(state.headers, "sequence")
+        this.saveHeaderValue(state.headers, "sequence")
     }
 
-    saveHeaders(headers, redfin, id, value) {
+    saveHeader(header) {
+        app.retryAjax(JSON.stringify(header), {api: "/saveheader", type: "post"})
+            .done(function(content) {
+                console.log("saving header worked!", header, arguments)
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+    }
+    saveHeaderValue(headers, redfin, id, value) {
         var data = {redfin: redfin,
                     data: headers ? _.map(headers, header => [header._id, header[redfin]])
                             : [[id, value]]}
-        app.retryAjax(JSON.stringify(data), {api: "/saveheaderdata", type: "post"})
+        app.retryAjax(JSON.stringify(data), {api: "/saveheadervalue", type: "post"})
             .done(function(content){
                 console.log("saving worked!", data, arguments)
             }.bind(this))
@@ -226,10 +250,13 @@ class App extends React.Component {
             <Grid fluid={true}>
                 <Header
                     headers={this.state.headers}
-                    canMove={this.state.canMove}/>
+                    canMove={this.state.canMove}
+                    save={_.bind(this.saveHeader, this)}
+                    hide={_.bind(this.hideHeader, this)}/>
                 <Control
                     hidden={this.state.hidden}
                     canMove={this.state.canMove}
+                    showHeader={_.bind(this.showHeader, this)}
                     currentActivesOnly={this.state.currentActivesOnly}/>
             </Grid>
         )
@@ -242,56 +269,31 @@ class FieldEditor extends React.Component {
         this.state = _.clone(props)
     }
     componentWillReceiveProps(nextProps) {
-        var state = _.clone(this.state)
-        state.showModal = nextProps.showModal
-        this.setState(state)
+        this.setState(_.clone(nextProps))
     }
-    updateState(updater) {
-        var state = _.clone(this.state);
-        updater(state)
-        this.setState(state)
-        return state
-    }
-    updateField(name, event) {
-        var s = _.clone(this.state)
-        s[name] = event.target.value
-        this.setState(s)
-    }
-    signal(name, close, ...args) {
-        // signaller[name].dispatch(...args)
-        // if (close) this.close()
+    updateFieldValue(name, event) {
+        this.props.update(s => s.header[name] = event.target.value)
     }
     render() {
         var header = this.state.header,
             id = header._id,
-            //updateClose = [this.signal, this, "headerUpdated", true, fieldId],
-            props = {update: _.bind(this.updateField, this), header: header},
-            close = _.bind(this.updateState, this, (s) => s.showModal = false);
+            props = {update: _.bind(this.updateFieldValue, this), header: header};
         return (
-            <Modal show={this.state.showModal} onHide={close}>
+            <Modal show={this.state.showModal} onHide={_.bind(this.props.close, this, null)}>
                 <Modal.Header closeButton>
                     <Modal.Title>{header.text}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <Grid fluid={true}>
                         <Field title="Text" {...props}/>
-                        <Field title="Bucket Size" {...props} text="* = use disctinct values"/>
-                        <Row>
-                            <Col md={3} className="title">Type</Col>
-                            <Col md={8} className="values">
-                                <ButtonGroup>
-                                    <Button>Unadorned</Button>
-                                    <Button>Math</Button>
-                                    <Button>DistanceTo</Button>
-                                </ButtonGroup>
-                            </Col>
-                        </Row>
-                        <Field title="Math" {...props}/>
-                        <Field title="Distance To" {...props}/>
+                        <Field title="Bucket Size" {...props} text="* = use distinct values"/>
+                        <Field title="&raquo; Math" {...props}/>
+                        <Field title="&raquo; Distance To" {...props}/>
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button onClick={close}>Close</Button>
+                    <Button onClick={_.bind(this.props.close, this, this.state.header)}>Save & Close</Button>
+                    <Button onClick={_.bind(this.props.close, this, null)}>Close</Button>
                 </Modal.Footer>
             </Modal>
         )
