@@ -105,8 +105,8 @@ def update_and_retrieve_headers(listings):
 @app.route("/savelistingdata", methods=["PUT", "POST"])
 def save_listing_data():
     data = request.get_json(force=True)
-    res = mongo.db.listings.update({"_id": data.id},
-                                   {"$set": {data.fieldname: data.value}})
+    res = mongo.db.listings.update({"_id": data["id"]},
+                                   {"$set": {data["headername"]: data["value"]}})
     return json.dumps(list(res))
 
 

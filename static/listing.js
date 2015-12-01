@@ -14,6 +14,8 @@ var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = 
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
+function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
+
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
@@ -32,7 +34,6 @@ var ListingApp = (function () {
         this.loadAndRenderData();
         this.signaller = {
             headersSorted: new signals.Signal(),
-            moveToggled: new signals.Signal(),
             headerUpdated: new signals.Signal()
         };
         return this;
@@ -232,38 +233,30 @@ var Control = (function (_React$Component3) {
                 { className: "control" },
                 React.createElement(
                     Col,
-                    { md: 1, mdOffset: 8 },
+                    { md: 5, mdOffset: 7 },
                     React.createElement(
-                        Button,
-                        { bsStyle: "info", onClick: _.bind(this.signal, this, "newField") },
-                        "New Field"
-                    )
-                ),
-                React.createElement(
-                    Col,
-                    { md: 1 },
-                    React.createElement(
-                        Button,
-                        { bsStyle: curStyle, onClick: _.bind(this.signal, this, "currentActivesSelected") },
-                        "Current Active"
-                    )
-                ),
-                React.createElement(
-                    Col,
-                    { md: 1 },
-                    React.createElement(
-                        Button,
-                        { bsStyle: moveStyle, onClick: _.bind(this.signal, this, "moveToggled") },
-                        "Toggle move"
-                    )
-                ),
-                React.createElement(
-                    Col,
-                    { md: 1 },
-                    React.createElement(
-                        DropdownButton,
-                        { pullRight: true, title: "Unhide", id: "unhide" },
-                        hidden
+                        "span",
+                        { className: "pull-right" },
+                        React.createElement(
+                            Button,
+                            { bsStyle: "info", onClick: _.bind(this.signal, this, "newField") },
+                            "New Field"
+                        ),
+                        React.createElement(
+                            Button,
+                            { bsStyle: curStyle, onClick: this.props.toggleCurrentActives },
+                            "Current Actives"
+                        ),
+                        React.createElement(
+                            Button,
+                            { bsStyle: moveStyle, onClick: this.props.toggleMove },
+                            "Toggle move"
+                        ),
+                        React.createElement(
+                            DropdownButton,
+                            { pullRight: true, title: "Unhide", id: "unhide" },
+                            hidden
+                        )
                     )
                 )
             );
@@ -273,13 +266,127 @@ var Control = (function (_React$Component3) {
     return Control;
 })(React.Component);
 
-var App = (function (_React$Component4) {
-    _inherits(App, _React$Component4);
+var Listing = (function (_React$Component4) {
+    _inherits(Listing, _React$Component4);
+
+    function Listing() {
+        _classCallCheck(this, Listing);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(Listing).apply(this, arguments));
+    }
+
+    _createClass(Listing, [{
+        key: "render",
+        value: function render() {
+            var _this7 = this;
+
+            if (!this.props) return false;
+            var items = _.map(this.props.headers, function (header) {
+                return React.createElement(ListingItem, {
+                    key: header._id,
+                    keys: _this7.props.keys,
+                    redfin: header.redfin,
+                    listing: _this7.props.listing,
+                    header: header });
+            });
+            return React.createElement(
+                Row,
+                { className: "house" },
+                items
+            );
+        }
+    }]);
+
+    return Listing;
+})(React.Component);
+
+var ListingItem = (function (_React$Component5) {
+    _inherits(ListingItem, _React$Component5);
+
+    function ListingItem() {
+        _classCallCheck(this, ListingItem);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(ListingItem).apply(this, arguments));
+    }
+
+    _createClass(ListingItem, [{
+        key: "formatter_undef",
+        value: function formatter_undef() {
+            return "~undefined~";
+        }
+    }, {
+        key: "formatter_date",
+        value: function formatter_date(obj) {
+            return new Date(obj.$date).toLocaleString('en-US');
+        }
+    }, {
+        key: "formatter_string",
+        value: function formatter_string(s) {
+            return s;
+        }
+    }, {
+        key: "formatter_number",
+        value: function formatter_number(s) {
+            return String(s);
+        }
+    }, {
+        key: "formatter_object",
+        value: function formatter_object(obj) {
+            var f = _.find([["$date", "date"]], function (pair) {
+                return obj[pair[0]] !== undefined;
+            });
+            return f ? this["formatter_" + f[1]](obj) : this.formatter_undef();
+        }
+    }, {
+        key: "formatter_url",
+        value: function formatter_url(url) {
+            return React.createElement(
+                "a",
+                { href: url, target: "_blank" },
+                "Redfin"
+            );
+        }
+        // formatter_lot_size(value) {return String(100000 + parseInt(value || 0)).substr(1) }
+
+    }, {
+        key: "formatter_new_35",
+        value: function formatter_new_35(value, listing, keys, header) {
+            var url = "https://www.google.com/maps/dir/" + listing[keys.latitude] + "," + listing[keys.longitude] + "/" + header.distanceTo;
+            return React.createElement(
+                "a",
+                { href: url, target: "_blank" },
+                value
+            );
+        }
+    }, {
+        key: "formatter",
+        value: function formatter(value, listing, keys, header) {
+            return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header);
+        }
+    }, {
+        key: "render",
+        value: function render() {
+            if (!this.props) return false;
+            var value = this.props.listing[this.props.header._id];
+
+            return React.createElement(
+                Col,
+                { md: 1, style: { overflow: "hidden", height: 20, whiteSpace: "nowrap" } },
+                this.formatter(value, this.props.listing, this.props.keys, this.props.header)
+            );
+        }
+    }]);
+
+    return ListingItem;
+})(React.Component);
+
+var App = (function (_React$Component6) {
+    _inherits(App, _React$Component6);
 
     function App(props) {
         _classCallCheck(this, App);
 
-        var _this6 = _possibleConstructorReturn(this, Object.getPrototypeOf(App).call(this, props)); //headers, listings, keys
+        var _this9 = _possibleConstructorReturn(this, Object.getPrototypeOf(App).call(this, props)); //headers, listings, keys
 
         var cao = true;
         var keys = props.keys;
@@ -296,66 +403,182 @@ var App = (function (_React$Component4) {
 
         var displayable = _$partition2[0];
         var hidden = _$partition2[1];
+        var listings = _this9.updateMath(_.clone(props));
 
-        _this6.state = { currentActivesOnly: cao, canMove: false,
-            headers: displayable, hidden: hidden };
-        _this6.state.listings = _.chain(props.listings).filter(function (l) {
+        _this9.state = { currentActivesOnly: true, canMove: false,
+            headers: displayable, hidden: hidden,
+            maxDate: maxDate, allListings: listings };
+        _this9.state.listings = _.chain(listings).filter(function (l) {
             return !cao || l[dt].$date == maxDate && l[keys.status].toLowerCase() == "active";
         }).sortBy(function (l) {
-            return _.map(_this6.state.headers, function (h) {
-                return l[h._id];
-            }).join("$");
+            return _this9.getListingSortValue(l, _this9.state.headers);
         }).value();
-        app.signaller.moveToggled.add(function () {
-            return _this6.updateState(function (s) {
-                return s.canMove = !s.canMove;
-            });
-        });
-        app.signaller.headersSorted.add(_.bind(_this6.reorderHeaders, _this6));
+        app.signaller.headersSorted.add(_.bind(_this9.reorderHeaders, _this9));
         app.signaller.headerUpdated.add(function (id, redfin, value) {
-            return _this6.updateState(function (s) {
+            return _this9.updateState(function (s) {
                 return s.headers[id][redfin] = value;
             }, function () {
-                return _this6.saveHeaderValue(null, redfin, id, value);
+                return _this9.saveHeaderValue(null, redfin, id, value);
             });
         });
-
-        return _this6;
+        _.delay(_.bind(_this9.updateDistances, _this9), 1000); // wait for google to load?
+        return _this9;
     }
 
     _createClass(App, [{
+        key: "getListingSortValue",
+        value: function getListingSortValue(listing, headers) {
+            return _.chain(headers).first(6).map(function (h) {
+                return listing[h._id];
+            }).map(function (value) {
+                return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
+                );
+            }).value().join("$");
+        }
+    }, {
+        key: "updateDistances",
+        value: function updateDistances(opts) {
+            var _this10 = this;
+
+            if (!opts) {
+                var lat = this.props.keys.latitude,
+                    long = this.props.keys.longitude,
+                    headers = _.filter(this.state.headers, function (h) {
+                    return !_.isEmpty(h.distanceTo);
+                });
+                if (!headers.length) return;
+                opts = { map: [], wait: 1000,
+                    base: { travelMode: google.maps.TravelMode.WALKING },
+                    directionsService: new google.maps.DirectionsService() };
+                _.each(this.state.listings, function (l, index) {
+                    _.each(headers, function (h) {
+                        if (!l[h._id]) opts.map.push([index, l[0], l[lat], l[long], h._id, h.distanceTo, h.redfin]);
+                    });
+                });
+                if (!opts.map.length) return;
+            }
+
+            var _opts$map$pop = opts.map.pop();
+
+            var _opts$map$pop2 = _slicedToArray(_opts$map$pop, 7);
+
+            var index = _opts$map$pop2[0];
+            var listing_id = _opts$map$pop2[1];
+            var lat = _opts$map$pop2[2];
+            var long = _opts$map$pop2[3];
+            var id = _opts$map$pop2[4];
+            var distanceTo = _opts$map$pop2[5];
+            var headerName = _opts$map$pop2[6];
+
+            if (!index) return;
+
+            var request = _.clone(opts.base);
+            _.extend(request, { origin: lat + "," + long, destination: distanceTo });
+            opts.directionsService.route(request, function (response, status) {
+                var duration;
+                try {
+                    duration = parseInt(response.routes[0].legs[0].duration.text); // distance.text, duration.text
+                } catch (e) {
+                    console.log("error getting directions for", listing, e);
+                    duration = 0;
+                }
+                var state = _.clone(_this10.state);
+                state.listings[index][id] = duration;
+                _this10.setState(state);
+                _this10.updateListingDB(listing_id, headerName, duration);
+            });
+
+            _.delay(_.bind(this.updateDistances, this), opts.wait, opts);
+        }
+    }, {
+        key: "updateListingDB",
+        value: function updateListingDB(id, headerName, value) {
+            var data = { id: id, headername: headerName, value: value };
+            app.retryAjax(JSON.stringify(data), { api: "savelistingdata", type: "post" }).done((function (content) {
+                console.log("worked!", content);
+            }).bind(this)).fail((function () {
+                console.log("failed", arguments);
+            }).bind(this));
+        }
+    }, {
+        key: "updateMath",
+        value: function updateMath(content) {
+            _.chain(content.headers).filter(function (f) {
+                return f.math !== undefined;
+            }).each(function (f) {
+                var math = f.math,
+                    id = f._id;
+                _.each(content.headers, function (f) {
+                    math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]");
+                });
+                _.each(content.listings, function (l) {
+                    try {
+                        eval("l[" + id + "]=" + math);
+                    } catch (e) {
+                        l[id] = "***";
+                    }
+                });
+            });
+            return content.listings;
+        }
+    }, {
+        key: "toggleCurrentActives",
+        value: function toggleCurrentActives() {
+            var _this11 = this;
+
+            var state = _.clone(this.state),
+                keys = this.props.keys,
+                dt = keys.last_loaded;
+
+            state.currentActivesOnly = !state.currentActivesOnly;
+            state.listings = _.chain(state.allListings).filter(function (l) {
+                return !state.currentActivesOnly || l[dt].$date == state.maxDate && l[keys.status].toLowerCase() == "active";
+            }).sortBy(function (l) {
+                return _this11.getListingSortValue(l, state.headers);
+            }).value();
+
+            this.setState(state);
+        }
+    }, {
+        key: "toggleMove",
+        value: function toggleMove() {
+            this.updateState(function (s) {
+                return s.canMove = !s.canMove;
+            });
+        }
+    }, {
         key: "showHeader",
         value: function showHeader(id) {
-            var _this7 = this;
+            var _this12 = this;
 
             this.updateState(function (s) {
-                return _this7.toggleHeaderVisibility(s.hidden, s.headers, id, true);
+                return _this12.toggleHeaderVisibility(s.hidden, s.headers, id, true);
             }, function () {
-                return _this7.saveHeaderValue(null, "show", id, true);
+                return _this12.saveHeaderValue(null, "show", id, true);
             });
         }
     }, {
         key: "hideHeader",
         value: function hideHeader(id) {
-            var _this8 = this;
+            var _this13 = this;
 
             this.updateState(function (s) {
-                return _this8.toggleHeaderVisibility(s.headers, s.hidden, id, true);
+                return _this13.toggleHeaderVisibility(s.headers, s.hidden, id, true);
             }, function () {
-                return _this8.saveHeaderValue(null, "show", id, false);
+                return _this13.saveHeaderValue(null, "show", id, false);
             });
         }
     }, {
         key: "saveHeader",
         value: function saveHeader(header) {
-            var _this9 = this;
+            var _this14 = this;
 
             this.updateState(function (s) {
                 return s.headers[_.findIndex(s.headers, function (h) {
                     return h._id == header._id;
                 })] = header;
             }, function () {
-                return _this9.saveHeader(header);
+                return _this14.saveHeader(header);
             });
         }
     }, {
@@ -377,6 +600,8 @@ var App = (function (_React$Component4) {
     }, {
         key: "reorderHeaders",
         value: function reorderHeaders(sortNode) {
+            var _this15 = this;
+
             var ids = sortNode.sortable("toArray", { attribute: "data-id" }),
                 state = _.clone(this.state);
 
@@ -387,6 +612,9 @@ var App = (function (_React$Component4) {
             });
             state.headers = _.sortBy(state.headers, "sequence");
             sortNode.sortable("cancel");
+            state.listings = _.sortBy(state.listings, function (l) {
+                return _this15.getListingSortValue(l, state.headers);
+            });
             this.setState(state);
             this.saveHeaderValue(state.headers, "sequence");
         }
@@ -413,8 +641,41 @@ var App = (function (_React$Component4) {
             }).bind(this));
         }
     }, {
+        key: "addNewField",
+        value: function addNewField() {
+            var len = this.state.headers.length,
+                state = _.clone(this.state),
+                header = _.extend(_.clone(state.fields[0]), {
+                _id: len,
+                redfin: "new_" + len,
+                sequence: len,
+                show: true,
+                text: "new_" + len });
+
+            state.headers.push(header);
+            _.each(state.listings, function (l) {
+                return l.push("");
+            });
+            this.setState(newState);
+
+            retryAjax(JSON.stringify(header), { api: "/savenewfield", type: "post" }).done((function (content) {
+                console.log("worked!", arguments);
+            }).bind(this)).fail((function () {
+                console.log(arguments);
+            }).bind(this));
+        }
+    }, {
         key: "render",
         value: function render() {
+            var _this16 = this;
+
+            var listings = _.map(this.state.listings, function (listing) {
+                return React.createElement(Listing, {
+                    key: listing[0],
+                    keys: _this16.props.keys,
+                    listing: listing,
+                    headers: _this16.state.headers });
+            });
             return React.createElement(
                 Grid,
                 { fluid: true },
@@ -427,7 +688,10 @@ var App = (function (_React$Component4) {
                     hidden: this.state.hidden,
                     canMove: this.state.canMove,
                     showHeader: _.bind(this.showHeader, this),
-                    currentActivesOnly: this.state.currentActivesOnly })
+                    currentActivesOnly: this.state.currentActivesOnly,
+                    toggleMove: _.bind(this.toggleMove, this),
+                    toggleCurrentActives: _.bind(this.toggleCurrentActives, this) }),
+                listings
             );
         }
     }]);
@@ -435,16 +699,16 @@ var App = (function (_React$Component4) {
     return App;
 })(React.Component);
 
-var FieldEditor = (function (_React$Component5) {
-    _inherits(FieldEditor, _React$Component5);
+var FieldEditor = (function (_React$Component7) {
+    _inherits(FieldEditor, _React$Component7);
 
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this10 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this17 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this10.state = _.clone(props);
-        return _this10;
+        _this17.state = _.clone(props);
+        return _this17;
     }
 
     _createClass(FieldEditor, [{
@@ -485,8 +749,8 @@ var FieldEditor = (function (_React$Component5) {
                         { fluid: true },
                         React.createElement(Field, _extends({ title: "Text" }, props)),
                         React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use distinct values" })),
-                        React.createElement(Field, _extends({ title: "» Math" }, props)),
-                        React.createElement(Field, _extends({ title: "» Distance To" }, props))
+                        React.createElement(Field, _extends({ title: "» Math", name: "math" }, props)),
+                        React.createElement(Field, _extends({ title: "» Distance To", name: "distanceTo" }, props))
                     )
                 ),
                 React.createElement(
@@ -510,8 +774,8 @@ var FieldEditor = (function (_React$Component5) {
     return FieldEditor;
 })(React.Component);
 
-var Field = (function (_React$Component6) {
-    _inherits(Field, _React$Component6);
+var Field = (function (_React$Component8) {
+    _inherits(Field, _React$Component8);
 
     function Field() {
         _classCallCheck(this, Field);
@@ -523,7 +787,7 @@ var Field = (function (_React$Component6) {
         key: "render",
         value: function render() {
             if (!this.props) return false;
-            var fieldname = this.props.title.substr(0, 1).toLowerCase() + this.props.title.substr(1).replace(/\s+/g, ""),
+            var fieldname = this.props.name || this.props.title.substr(0, 1).toLowerCase() + this.props.title.substr(1).replace(/\s+/g, ""),
                 desc = this.props.text ? React.createElement(
                 "div",
                 null,
@@ -552,120 +816,10 @@ var Field = (function (_React$Component6) {
 })(React.Component);
 
 /*
-var signaller = {
-  headerUpdated: new signals.Signal(),
-  moveToggled: new signals.Signal(),
-  currentsSelected: new signals.Signal(),
-  newField: new signals.Signal()
-};
-
-
-
-
-
-var House = React.createClass({
-    getInitialState() {
-        return {listing: {}, fields: {}};
-    },
-    render() {
-        var items = _.map(this.props.fields, field => {
-            return (
-                <HouseItem key={field._id} name={field.fieldname}
-                    value={this.props.listing[field._id]} field = {field}/>
-            )
-        })
-        return (<Row className="house">{items}</Row>);
-    }
-});
-
-var HouseItem = React.createClass({
-    formatter_undef() { return "~undefined~"},
-    formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')},
-    formatter_string(s) { return s },
-    formatter_number(s) { return String(s)},
-    formatter_object(obj) {
-        var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
-        return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
-    },
-    formatter_url(url) {
-        return <a href={url} target="_blank">Redfin</a>
-    },
-    formatter(value, header) {
-        return (this["formatter_" + header.text]
-                || this["formatter_" + (typeof value)]
-                || this.formatter_undef)(value)
-    },
-    getInitialState() {
-        return {name: "", value: "", field: {}};
-    },
-    render() {
-        var cols = this.props.field.columns ? this.props.field.columns : 2;
-        return (
-            <Col md={cols} className={this.props.name} style={{overflow: "hidden", height: 20}} >
-                {this.formatter(this.props.value, this.props.field)}
-            </Col>
-        );
-    }
-});
-
-
 
 var App = React.createClass({
-    updateListingDB(id, fieldname, value) {
-        var data = {id: id, fieldname: fieldname, value: value}
-        retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
-            .done(function(content) {
-                console.log("worked!", content)
-            }.bind(this))
-            .fail(function() {
-                console.log("failed", arguments)
-            }.bind(this))
-    },
-    updateSomeDistances(opts) {
-        var listings = _.chain(opts.listings)
-                        .filter(l => !l[opts.fieldId])
-                        .first(opts.count)
-                        .value();
-        if (!listings.length) return
 
-       _.each(listings, listing => {
-            var request = _.clone(opts.base);
-            request.origin = listing[opts.lat] + "," + listing[opts.long]
-            opts.directionsService.route(request, (response, status) => {
-                try {
-                    var duration = response.routes[0].legs[0].duration // distance.text, duration.text
-                    listing[opts.fieldId] = parseInt(duration.text)
-                    this.setState(opts.state)
-                    //this.updateListingDB(listing[opts.state.redfin], headerName, parseInt(duration.text))
-               } catch (e) {
-                    console.log("error getting directions for", listing, e)
-                    listing[opts.fieldId] = "00"
 
-                }
-                console.log(listing[opts.fieldId])
-            })
-        })
-
-        _.delay(this.updateSomeDistances, opts.wait, opts)
-    },
-
-    updateDistanceTo(fieldId, location) {
-        var state = _.clone(this.state)
-
-        this.updateSomeDistances({
-            base: {destination: location, travelMode: google.maps.TravelMode.WALKING},
-            directionsService: new google.maps.DirectionsService(),
-            fieldId: fieldId,
-            state: state,
-            field: state.fields[fieldId],
-            lat: this.getFieldPos("latitude"),
-            long: this.getFieldPos("longitude"),
-            listings: state.listings,
-            count: 2,
-            wait: 1500})
-        console.log(state) // should defer updating state/db for a second?)
-
-    },
     updateBuckets(content) {
         _.chain(content.fields)
             .filter(f => f.bucketSize !== undefined)
@@ -687,101 +841,6 @@ var App = React.createClass({
                 }
             })
     },
-    updateMath(content) {
-        _.chain(content.fields)
-            .filter(f => f.math !== undefined)
-            .each(f => {
-                var math = f.math,
-                    id = f._id
-                _.each(content.fields, f => {math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]")})
-                _.each(content.listings, l => {
-                    try {
-                        eval("l[" + id + "]=" + math)
-                    } catch (e) {
-                        l[id] = "***"
-                    }
-                })
-            })
-        console.log(content)
-    },
-    headerUpdated(fieldId, headerName, value, ...args) { // hideField, setWidth
-        var fields = _.clone(this.state.fields),
-            index = _.findIndex(fields, (f) => {return f._id == fieldId});
-
-        fields[index][headerName] = value
-        this.updateDB(headerName, fields[index])
-        this.setState(fields)
-        if (typeof args[0] == "function") args[0]()
-    },
-    addNewField() {
-        var len = this.state.fields.length,
-            newState = _.clone(this.state),
-            field =  _.extend(_.clone(this.state.fields[0]), {
-                _id: len,
-                redfin: "new_" + len,
-                fieldname: "new_" + len,
-                sequence: len,
-                show: true,
-                text: "new_" + len})
-
-        newState.fields.push(field)
-        _.each(newState.listings, l => l.push(""))
-        this.setState(newState)
-
-        retryAjax(JSON.stringify(field), {api: "/savenewfield", type: "post"})
-            .done(function(content){
-                console.log("worked!", arguments)
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-
-    },
-    getInitialState() {
-        signaller.headerUpdated.add(this.headerUpdated);
-        signaller.moveToggled.add(this.moveToggled)
-        signaller.currentsSelected.add(this.currentsSelected)
-        signaller.newField.add(this.addNewField)
-        return {fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false}
-    },
-    moveToggled() {
-        this.setState({canMove: !this.state.canMove })
-    },
-    currentsSelected() {
-        this.setState({currentsOnly: !this.state.currentsOnly})
-    },
-    getFieldPos(name) {
-        return _.find(this.state.fields, f => f.text== name)._id
-    },
-    render() {
-        if (!this.state.listings.length) return false
-        var redfinId = this.state.redfin,
-            [displayable, hidden] = _.partition(this.state.fields, field => field.show),
-            dtPos = this.getFieldPos("last_loaded"),
-            stPos = this.getFieldPos("status"),
-            maxDate = _.chain(this.state.listings).map(l => l[dtPos].$date).max().value(),
-            houses = _.chain(this.state.listings)
-                        .filter(l => !this.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active")
-                        .sortBy(l => _.map(displayable,  f => l[f._id]).join("$"))
-                        .map(function(l) {
-                            return (<House key={l[redfinId]} listing={l} fields={displayable}/> )
-                            }.bind(this))
-                        .value();
-
-        return (
-            <Grid fluid={true}>
-                <Header
-                    fields={displayable}
-                    createSortable={this.createSortable}
-                    canMove={this.state.canMove}
-                    updateDT={this.updateDistanceTo}/>
-                <Control hidden={hidden} canMove={this.state.canMove} currentsOnly={this.state.currentsOnly}/>
-                {houses}
-            </Grid>
-        )
-    }
-})
-
-
+,
 */
 //# sourceMappingURL=/Users/michaelfranklin/Developer/personal/python/house/static/listing.js.map

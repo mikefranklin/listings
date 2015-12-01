@@ -1,13 +1,10 @@
 .header {
   border-bottom: solid blue 2px;
   margin-bottom: 3px;
-  padding-bottom: 3px;
 }
 
 .header .item {
-  text-align: left;
   padding: 5px;
-  margin-bottom: 3px;
   border: solid #eee 1px;
 }
 
@@ -23,13 +20,17 @@
 }
 
 .house {
-  padding: 2px 0;
-  margin: 2px 0;
   border-bottom: solid 1px #ccc;
+  padding: 2px 0;
 }
 
 .control {
   background-color: #eef;
+}
+
+.control span > button,
+.control span > div {
+   margin-left: 15px;
 }
 
 .header .edit {

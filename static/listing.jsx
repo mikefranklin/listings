@@ -12,12 +12,10 @@ class ListingApp {
         this.loadAndRenderData()
         this.signaller = {
             headersSorted: new signals.Signal(),
-            moveToggled: new signals.Signal(),
             headerUpdated: new signals.Signal()
         }
         return this
     }
-
     loadAndRenderData() {
         this.retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) { // headers, listings, keys, api
@@ -31,7 +29,6 @@ class ListingApp {
                 console.log(arguments)
             }.bind(this))
     }
-
     retryAjax(params, options) {
         var opts = _.extend({base: "", api: "*required*", dataType: "json",
                             init: "", delay: 0, type: "post"}, options),
@@ -139,27 +136,73 @@ class Control extends React.Component {
             });
         return (
             <Row className="control">
-                <Col md={1} mdOffset={8}>
-                    <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
-                        New Field
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <Button bsStyle={curStyle} onClick={_.bind(this.signal, this, "currentActivesSelected")}>
-                        Current Active
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <Button bsStyle={moveStyle} onClick={_.bind(this.signal, this, "moveToggled")}>
-                        Toggle move
-                    </Button>
-                </Col>
-                <Col md={1}>
-                    <DropdownButton pullRight title="Unhide" id="unhide">
-                    {hidden}
-                    </DropdownButton>
+                <Col md={5} mdOffset={7}>
+                    <span className="pull-right">
+                        <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
+                            New Field
+                        </Button>
+                        <Button bsStyle={curStyle} onClick={this.props.toggleCurrentActives}>
+                            Current Actives
+                        </Button>
+                        <Button bsStyle={moveStyle} onClick={this.props.toggleMove}>
+                            Toggle move
+                        </Button>
+                        <DropdownButton pullRight title="Unhide" id="unhide">
+                        {hidden}
+                        </DropdownButton>
+                    </span>
                 </Col>
             </Row>)
+    }
+}
+
+class Listing extends React.Component {
+    render() {
+        if (!this.props) return false
+        var items = _.map(this.props.headers, header => (
+                <ListingItem
+                    key={header._id}
+                    keys={this.props.keys}
+                    redfin={header.redfin}
+                    listing={this.props.listing}
+                    header={header}/>))
+        return (<Row className="house">{items}</Row>);
+    }
+}
+
+class ListingItem extends React.Component {
+    formatter_undef() { return "~undefined~"}
+    formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')}
+    formatter_string(s) { return s }
+    formatter_number(s) { return String(s)}
+    formatter_object(obj) {
+        var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
+        return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
+    }
+    formatter_url(url) {
+        return <a href={url} target="_blank">Redfin</a>
+    }
+    // formatter_lot_size(value) {return String(100000 + parseInt(value || 0)).substr(1) }
+    formatter_new_35(value, listing, keys, header) {
+        var url = "https://www.google.com/maps/dir/"
+                    + listing[keys.latitude] + "," + listing[keys.longitude] + "/"
+                    + header.distanceTo;
+        return <a href={url} target="_blank">{value}</a>
+    }
+    formatter(value, listing, keys, header) {
+        return (this["formatter_" + header.redfin.replace(/\s/g,"_")]
+                || this["formatter_" + (typeof value)]
+                || this.formatter_undef)(value, listing, keys, header)
+    }
+    render() {
+        if (!this.props) return false
+        var value = this.props.listing[this.props.header._id]
+
+        return (
+            <Col md={1} style={{overflow: "hidden", height: 20, whiteSpace: "nowrap"}} >
+                {this.formatter(value, this.props.listing, this.props.keys, this.props.header)}
+            </Col>
+        )
     }
 }
 
@@ -170,21 +213,114 @@ class App extends React.Component {
             keys = props.keys,
             dt = keys.last_loaded,
             maxDate = _.chain(props.listings).map(l => l[dt].$date).max().value(),
-            [displayable, hidden] = _.partition(props.headers, h => h.show);
+            [displayable, hidden] = _.partition(props.headers, h => h.show),
+            listings = this.updateMath(_.clone(props))
 
-        this.state = {currentActivesOnly: cao, canMove: false,
-                        headers: displayable, hidden: hidden}
-        this.state.listings = _.chain(props.listings)
+        this.state = {currentActivesOnly: true, canMove: false,
+                        headers: displayable, hidden: hidden,
+                        maxDate: maxDate, allListings: listings}
+        this.state.listings =  _.chain(listings)
                                 .filter(l => !cao || l[dt].$date == maxDate
                                                 && l[keys.status].toLowerCase() == "active")
-                                .sortBy(l => _.map(this.state.headers, h => l[h._id]).join("$"))
+                                .sortBy(l => this.getListingSortValue(l, this.state.headers))
                                 .value()
-        app.signaller.moveToggled.add(() => this.updateState(s => s.canMove = !s.canMove))
         app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
         app.signaller.headerUpdated.add((id, redfin, value) =>
             this.updateState(s => s.headers[id][redfin] = value,
                             () => this.saveHeaderValue(null, redfin, id, value)))
+        _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
+    }
+    getListingSortValue(listing, headers) {
+        return _.chain(headers)
+                .first(6)
+                .map(h => listing[h._id])
+                .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
+                .value()
+                .join("$")
+    }
+    updateDistances(opts) {
+        if (!opts) {
+            var lat = this.props.keys.latitude,
+                long = this.props.keys.longitude,
+                headers = _.filter(this.state.headers, h => !_.isEmpty(h.distanceTo))
+            if (!headers.length) return
+            opts = {map: [], wait: 1000,
+                base: {travelMode: google.maps.TravelMode.WALKING},
+                directionsService: new google.maps.DirectionsService()}
+            _.each(this.state.listings, (l, index) => {
+                _.each(headers, h => {
+                    if (!l[h._id]) opts.map.push([index, l[0], l[lat], l[long],
+                                                    h._id, h.distanceTo, h.redfin])
+                })
+            })
+            if (!opts.map.length) return
+        }
 
+        var [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
+        if (!index) return
+
+        var request = _.clone(opts.base);
+        _.extend(request, {origin: lat + "," + long, destination: distanceTo})
+        opts.directionsService.route(request, (response, status) => {
+            var duration;
+            try {
+                duration = parseInt(response.routes[0].legs[0].duration.text) // distance.text, duration.text
+           } catch (e) {
+                console.log("error getting directions for", listing, e)
+                duration=0
+            }
+            var state = _.clone(this.state)
+            state.listings[index][id] = duration
+            this.setState(state)
+            this.updateListingDB(listing_id, headerName, duration)
+        })
+
+        _.delay(_.bind(this.updateDistances, this), opts.wait, opts)
+    }
+    updateListingDB(id, headerName, value) {
+        var data = {id: id, headername: headerName, value: value}
+        app.retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
+            .done(function(content) {
+                console.log("worked!", content)
+            }.bind(this))
+            .fail(function() {
+                console.log("failed", arguments)
+            }.bind(this))
+    }
+    updateMath(content) {
+        _.chain(content.headers)
+            .filter(f => f.math !== undefined)
+            .each(f => {
+                var math = f.math,
+                    id = f._id
+                _.each(content.headers, f => {math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]")})
+                _.each(content.listings, l => {
+                    try {
+                        eval("l[" + id + "]=" + math)
+                    } catch (e) {
+                        l[id] = "***"
+                    }
+                })
+            })
+        return content.listings
+    }
+    toggleCurrentActives() {
+        var state = _.clone(this.state),
+            keys = this.props.keys,
+            dt = keys.last_loaded;
+
+        state.currentActivesOnly = !state.currentActivesOnly
+        state.listings = _.chain(state.allListings)
+                            .filter(l => !state.currentActivesOnly
+                                            || l[dt].$date == state.maxDate
+                                            && l[keys.status].toLowerCase() == "active")
+                            .sortBy(l => this.getListingSortValue(l, state.headers))
+                            .value()
+
+        this.setState(state)
+    }
+    toggleMove() {
+        this.updateState(s => s.canMove = !s.canMove)
     }
     showHeader(id) {
         this.updateState(s => this.toggleHeaderVisibility(s.hidden, s.headers, id, true),
@@ -194,7 +330,6 @@ class App extends React.Component {
         this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, true),
                         () => this.saveHeaderValue(null, "show", id, false))
     }
-
     saveHeader(header) {
         this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
                         () => this.saveHeader(header))
@@ -220,10 +355,10 @@ class App extends React.Component {
         })
         state.headers = _.sortBy(state.headers, "sequence")
         sortNode.sortable("cancel");
+        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers))
         this.setState(state);
         this.saveHeaderValue(state.headers, "sequence")
     }
-
     saveHeader(header) {
         app.retryAjax(JSON.stringify(header), {api: "/saveheader", type: "post"})
             .done(function(content) {
@@ -245,7 +380,35 @@ class App extends React.Component {
                 console.log(arguments)
             }.bind(this))
     }
+    addNewField() {
+        var len = this.state.headers.length,
+            state = _.clone(this.state),
+            header =  _.extend(_.clone(state.fields[0]), {
+                _id: len,
+                redfin: "new_" + len,
+                sequence: len,
+                show: true,
+                text: "new_" + len})
+
+        state.headers.push(header)
+        _.each(state.listings, l => l.push(""))
+        this.setState(newState)
+
+        retryAjax(JSON.stringify(header), {api: "/savenewfield", type: "post"})
+            .done(function(content){
+                console.log("worked!", arguments)
+            }.bind(this))
+            .fail(function() {
+                console.log(arguments)
+            }.bind(this))
+    }
     render() {
+        var listings = _.map(this.state.listings, listing => (
+                <Listing
+                    key={listing[0]}
+                    keys={this.props.keys}
+                    listing={listing}
+                    headers={this.state.headers}/>))
         return (
             <Grid fluid={true}>
                 <Header
@@ -257,7 +420,10 @@ class App extends React.Component {
                     hidden={this.state.hidden}
                     canMove={this.state.canMove}
                     showHeader={_.bind(this.showHeader, this)}
-                    currentActivesOnly={this.state.currentActivesOnly}/>
+                    currentActivesOnly={this.state.currentActivesOnly}
+                    toggleMove={_.bind(this.toggleMove, this)}
+                    toggleCurrentActives={_.bind(this.toggleCurrentActives, this)}/>
+                {listings}
             </Grid>
         )
     }
@@ -287,8 +453,8 @@ class FieldEditor extends React.Component {
                     <Grid fluid={true}>
                         <Field title="Text" {...props}/>
                         <Field title="Bucket Size" {...props} text="* = use distinct values"/>
-                        <Field title="&raquo; Math" {...props}/>
-                        <Field title="&raquo; Distance To" {...props}/>
+                        <Field title="&raquo; Math" name="math" {...props}/>
+                        <Field title="&raquo; Distance To" name="distanceTo" {...props}/>
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
@@ -303,7 +469,7 @@ class FieldEditor extends React.Component {
 class Field extends React.Component {
     render() {
         if (!this.props) return false;
-        var fieldname = (this.props.title.substr(0, 1).toLowerCase()
+        var fieldname = this.props.name || (this.props.title.substr(0, 1).toLowerCase()
                         + this.props.title.substr(1).replace(/\s+/g, "")),
             desc = (this.props.text ? <div>{this.props.text}</div> : null)
         return (
@@ -321,120 +487,10 @@ class Field extends React.Component {
 
 
 /*
-var signaller = {
-  headerUpdated: new signals.Signal(),
-  moveToggled: new signals.Signal(),
-  currentsSelected: new signals.Signal(),
-  newField: new signals.Signal()
-};
-
-
-
-
-
-var House = React.createClass({
-    getInitialState() {
-        return {listing: {}, fields: {}};
-    },
-    render() {
-        var items = _.map(this.props.fields, field => {
-            return (
-                <HouseItem key={field._id} name={field.fieldname}
-                    value={this.props.listing[field._id]} field = {field}/>
-            )
-        })
-        return (<Row className="house">{items}</Row>);
-    }
-});
-
-var HouseItem = React.createClass({
-    formatter_undef() { return "~undefined~"},
-    formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')},
-    formatter_string(s) { return s },
-    formatter_number(s) { return String(s)},
-    formatter_object(obj) {
-        var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
-        return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
-    },
-    formatter_url(url) {
-        return <a href={url} target="_blank">Redfin</a>
-    },
-    formatter(value, header) {
-        return (this["formatter_" + header.text]
-                || this["formatter_" + (typeof value)]
-                || this.formatter_undef)(value)
-    },
-    getInitialState() {
-        return {name: "", value: "", field: {}};
-    },
-    render() {
-        var cols = this.props.field.columns ? this.props.field.columns : 2;
-        return (
-            <Col md={cols} className={this.props.name} style={{overflow: "hidden", height: 20}} >
-                {this.formatter(this.props.value, this.props.field)}
-            </Col>
-        );
-    }
-});
-
-
 
 var App = React.createClass({
-    updateListingDB(id, fieldname, value) {
-        var data = {id: id, fieldname: fieldname, value: value}
-        retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
-            .done(function(content) {
-                console.log("worked!", content)
-            }.bind(this))
-            .fail(function() {
-                console.log("failed", arguments)
-            }.bind(this))
-    },
-    updateSomeDistances(opts) {
-        var listings = _.chain(opts.listings)
-                        .filter(l => !l[opts.fieldId])
-                        .first(opts.count)
-                        .value();
-        if (!listings.length) return
 
-       _.each(listings, listing => {
-            var request = _.clone(opts.base);
-            request.origin = listing[opts.lat] + "," + listing[opts.long]
-            opts.directionsService.route(request, (response, status) => {
-                try {
-                    var duration = response.routes[0].legs[0].duration // distance.text, duration.text
-                    listing[opts.fieldId] = parseInt(duration.text)
-                    this.setState(opts.state)
-                    //this.updateListingDB(listing[opts.state.redfin], headerName, parseInt(duration.text))
-               } catch (e) {
-                    console.log("error getting directions for", listing, e)
-                    listing[opts.fieldId] = "00"
 
-                }
-                console.log(listing[opts.fieldId])
-            })
-        })
-
-        _.delay(this.updateSomeDistances, opts.wait, opts)
-    },
-
-    updateDistanceTo(fieldId, location) {
-        var state = _.clone(this.state)
-
-        this.updateSomeDistances({
-            base: {destination: location, travelMode: google.maps.TravelMode.WALKING},
-            directionsService: new google.maps.DirectionsService(),
-            fieldId: fieldId,
-            state: state,
-            field: state.fields[fieldId],
-            lat: this.getFieldPos("latitude"),
-            long: this.getFieldPos("longitude"),
-            listings: state.listings,
-            count: 2,
-            wait: 1500})
-        console.log(state) // should defer updating state/db for a second?)
-
-    },
     updateBuckets(content) {
         _.chain(content.fields)
             .filter(f => f.bucketSize !== undefined)
@@ -456,100 +512,5 @@ var App = React.createClass({
                 }
             })
     },
-    updateMath(content) {
-        _.chain(content.fields)
-            .filter(f => f.math !== undefined)
-            .each(f => {
-                var math = f.math,
-                    id = f._id
-                _.each(content.fields, f => {math = math.replace(new RegExp(f.redfin), "l[" + f._id + "]")})
-                _.each(content.listings, l => {
-                    try {
-                        eval("l[" + id + "]=" + math)
-                    } catch (e) {
-                        l[id] = "***"
-                    }
-                })
-            })
-        console.log(content)
-    },
-    headerUpdated(fieldId, headerName, value, ...args) { // hideField, setWidth
-        var fields = _.clone(this.state.fields),
-            index = _.findIndex(fields, (f) => {return f._id == fieldId});
-
-        fields[index][headerName] = value
-        this.updateDB(headerName, fields[index])
-        this.setState(fields)
-        if (typeof args[0] == "function") args[0]()
-    },
-    addNewField() {
-        var len = this.state.fields.length,
-            newState = _.clone(this.state),
-            field =  _.extend(_.clone(this.state.fields[0]), {
-                _id: len,
-                redfin: "new_" + len,
-                fieldname: "new_" + len,
-                sequence: len,
-                show: true,
-                text: "new_" + len})
-
-        newState.fields.push(field)
-        _.each(newState.listings, l => l.push(""))
-        this.setState(newState)
-
-        retryAjax(JSON.stringify(field), {api: "/savenewfield", type: "post"})
-            .done(function(content){
-                console.log("worked!", arguments)
-            }.bind(this))
-            .fail(function() {
-                console.log(arguments)
-            }.bind(this))
-
-    },
-    getInitialState() {
-        signaller.headerUpdated.add(this.headerUpdated);
-        signaller.moveToggled.add(this.moveToggled)
-        signaller.currentsSelected.add(this.currentsSelected)
-        signaller.newField.add(this.addNewField)
-        return {fields: {}, listings: [], redfin: null, canMove: false, currentsOnly: false}
-    },
-    moveToggled() {
-        this.setState({canMove: !this.state.canMove })
-    },
-    currentsSelected() {
-        this.setState({currentsOnly: !this.state.currentsOnly})
-    },
-    getFieldPos(name) {
-        return _.find(this.state.fields, f => f.text== name)._id
-    },
-    render() {
-        if (!this.state.listings.length) return false
-        var redfinId = this.state.redfin,
-            [displayable, hidden] = _.partition(this.state.fields, field => field.show),
-            dtPos = this.getFieldPos("last_loaded"),
-            stPos = this.getFieldPos("status"),
-            maxDate = _.chain(this.state.listings).map(l => l[dtPos].$date).max().value(),
-            houses = _.chain(this.state.listings)
-                        .filter(l => !this.state.currentsOnly || l[dtPos].$date == maxDate && l[stPos].toLowerCase() == "active")
-                        .sortBy(l => _.map(displayable,  f => l[f._id]).join("$"))
-                        .map(function(l) {
-                            return (<House key={l[redfinId]} listing={l} fields={displayable}/> )
-                            }.bind(this))
-                        .value();
-
-        return (
-            <Grid fluid={true}>
-                <Header
-                    fields={displayable}
-                    createSortable={this.createSortable}
-                    canMove={this.state.canMove}
-                    updateDT={this.updateDistanceTo}/>
-                <Control hidden={hidden} canMove={this.state.canMove} currentsOnly={this.state.currentsOnly}/>
-                {houses}
-            </Grid>
-        )
-    }
-})
-
-
+,
 */
