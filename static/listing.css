@@ -1,6 +1,11 @@
+
 .header {
   border-bottom: solid blue 2px;
   margin-bottom: 3px;
+  position: fixed;
+  width: 100%;
+  background-color: white;
+  z-index: 2;
 }
 
 .header .item {
@@ -24,8 +29,15 @@
   padding: 2px 0;
 }
 
+.house:hover {
+  background-color: rgb(252, 255, 212)
+}
+
 .control {
   background-color: #eef;
+  position: fixed;
+  width: 100%;
+  z-index: 2
 }
 
 .control span > button,

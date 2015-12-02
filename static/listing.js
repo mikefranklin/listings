@@ -45,7 +45,13 @@ var ListingApp = (function () {
             this.retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
                 // headers, listings, keys, api
                 $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api);
-                ReactDOM.render(React.createElement(App, content), document.getElementById('content'));
+                ReactDOM.render(React.createElement(App, content), document.getElementById('content'), function () {
+                    $('.fancybox-media').fancybox({
+                        openEffect: 'none',
+                        closeEffect: 'none',
+                        helpers: { media: {} }
+                    });
+                });
             }).bind(this)).fail((function () {
                 console.log(arguments);
             }).bind(this));
@@ -106,11 +112,13 @@ var Header = (function (_React$Component) {
             var _this2 = this;
 
             var items = _.map(this.props.headers, function (header) {
+                var values = _.chain(_this2.props.listings).pluck(header._id).uniq().value(); // unique values for bucketing
                 return React.createElement(HeaderItem, {
                     save: _this2.props.save,
                     hide: _this2.props.hide,
                     canMove: _this2.props.canMove,
                     key: header._id,
+                    values: values,
                     header: header });
             });
             return React.createElement(
@@ -184,6 +192,7 @@ var HeaderItem = (function (_React$Component2) {
                     React.createElement("i", { className: "fa fa-bolt" })
                 ),
                 React.createElement(FieldEditor, {
+                    values: this.props.values,
                     showModal: this.state.showModal,
                     header: this.state.header,
                     update: _.bind(this.updateState, this),
@@ -217,8 +226,10 @@ var Control = (function (_React$Component3) {
             var _this5 = this;
 
             if (!this.props) return false;
-            var moveStyle = this.props.canMove ? "success" : "default",
-                curStyle = this.props.currentActivesOnly ? "success" : "default",
+            var opts = ["default", "success"],
+                moveStyle = opts[+!!this.props.canMove],
+                curStyle = opts[+!!this.props.currentActivesOnly],
+                rankStyle = opts[+!!this.props.canRank],
                 hidden = _.map(this.props.hidden, function (header) {
                 return React.createElement(
                     MenuItem,
@@ -230,7 +241,7 @@ var Control = (function (_React$Component3) {
             });
             return React.createElement(
                 Row,
-                { className: "control" },
+                { className: "control", style: { top: this.props.canMove * 20 + 34 } },
                 React.createElement(
                     Col,
                     { md: 5, mdOffset: 7 },
@@ -239,22 +250,38 @@ var Control = (function (_React$Component3) {
                         { className: "pull-right" },
                         React.createElement(
                             Button,
-                            { bsStyle: "info", onClick: _.bind(this.signal, this, "newField") },
+                            {
+                                bsStyle: rankStyle,
+                                onClick: _.bind(this.props.toggleRank) },
+                            "Rank"
+                        ),
+                        React.createElement(
+                            Button,
+                            {
+                                bsStyle: "info",
+                                onClick: _.bind(this.signal, this, "newField") },
                             "New Field"
                         ),
                         React.createElement(
                             Button,
-                            { bsStyle: curStyle, onClick: this.props.toggleCurrentActives },
+                            {
+                                bsStyle: curStyle,
+                                onClick: this.props.toggleCurrentActives },
                             "Current Actives"
                         ),
                         React.createElement(
                             Button,
-                            { bsStyle: moveStyle, onClick: this.props.toggleMove },
+                            {
+                                bsStyle: moveStyle,
+                                onClick: this.props.toggleMove },
                             "Toggle move"
                         ),
                         React.createElement(
                             DropdownButton,
-                            { pullRight: true, title: "Unhide", id: "unhide" },
+                            {
+                                pullRight: true,
+                                title: "Unhide",
+                                id: "unhide" },
                             hidden
                         )
                     )
@@ -283,6 +310,7 @@ var Listing = (function (_React$Component4) {
             if (!this.props) return false;
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(ListingItem, {
+                    api: _this7.props.api,
                     key: header._id,
                     keys: _this7.props.keys,
                     redfin: header.redfin,
@@ -351,17 +379,30 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "formatter_new_35",
         value: function formatter_new_35(value, listing, keys, header) {
-            var url = "https://www.google.com/maps/dir/" + listing[keys.latitude] + "," + listing[keys.longitude] + "/" + header.distanceTo;
+            var url = "https://www.google.com/maps" + "?saddr=" + listing[keys.latitude] + "," + listing[keys.longitude] + "&daddr=" + header.distanceTo + "&output=embed";
             return React.createElement(
                 "a",
-                { href: url, target: "_blank" },
+                { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
+                value
+            );
+        }
+    }, {
+        key: "formatter_address",
+        value: function formatter_address(value, listing, keys, header, apikey) {
+            var url = "https://www.google.com/maps" + "?q=" + listing[keys.latitude] + "," + listing[keys.longitude] + "&output=embed";
+            // var url = "http://maps.googleapis.com/maps/api/streetview?size=800x500"
+            //             + "&location=" + listing[keys.latitude] + "," + listing[keys.longitude]
+            //             + "&key=" + apikey
+            return React.createElement(
+                "a",
+                { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
                 value
             );
         }
     }, {
         key: "formatter",
         value: function formatter(value, listing, keys, header) {
-            return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header);
+            return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api);
         }
     }, {
         key: "render",
@@ -405,9 +446,10 @@ var App = (function (_React$Component6) {
         var hidden = _$partition2[1];
         var listings = _this9.updateMath(_.clone(props));
 
-        _this9.state = { currentActivesOnly: true, canMove: false,
+        _this9.state = { currentActivesOnly: true, canMove: false, canRank: false,
             headers: displayable, hidden: hidden,
-            maxDate: maxDate, allListings: listings };
+            maxDate: maxDate, allListings: listings,
+            apikey: props.api };
         _this9.state.listings = _.chain(listings).filter(function (l) {
             return !cao || l[dt].$date == maxDate && l[keys.status].toLowerCase() == "active";
         }).sortBy(function (l) {
@@ -426,6 +468,14 @@ var App = (function (_React$Component6) {
     }
 
     _createClass(App, [{
+        key: "toggleRank",
+        value: function toggleRank() {
+            this.setState({ canRank: !this.state.canRank });
+            this.updateState(function (s) {
+                return s.canRank = !s.canRank;
+            });
+        }
+    }, {
         key: "getListingSortValue",
         value: function getListingSortValue(listing, headers) {
             return _.chain(headers).first(6).map(function (h) {
@@ -671,6 +721,7 @@ var App = (function (_React$Component6) {
 
             var listings = _.map(this.state.listings, function (listing) {
                 return React.createElement(Listing, {
+                    api: _this16.props.api,
                     key: listing[0],
                     keys: _this16.props.keys,
                     listing: listing,
@@ -682,15 +733,19 @@ var App = (function (_React$Component6) {
                 React.createElement(Header, {
                     headers: this.state.headers,
                     canMove: this.state.canMove,
+                    listings: this.state.listings,
                     save: _.bind(this.saveHeader, this),
                     hide: _.bind(this.hideHeader, this) }),
                 React.createElement(Control, {
                     hidden: this.state.hidden,
+                    canRank: this.state.canRank,
                     canMove: this.state.canMove,
                     showHeader: _.bind(this.showHeader, this),
                     currentActivesOnly: this.state.currentActivesOnly,
                     toggleMove: _.bind(this.toggleMove, this),
+                    toggleRank: _.bind(this.toggleRank, this),
                     toggleCurrentActives: _.bind(this.toggleCurrentActives, this) }),
+                React.createElement("div", { style: { paddingTop: this.state.canMove * 20 + 68 } }),
                 listings
             );
         }
@@ -719,8 +774,23 @@ var FieldEditor = (function (_React$Component7) {
     }, {
         key: "updateFieldValue",
         value: function updateFieldValue(name, event) {
+            var buckets = {},
+                value = event.target.value;
             this.props.update(function (s) {
-                return s.header[name] = event.target.value;
+                return s.header[name] = value;
+            });
+            if (name != "bucketSize") return;
+            if (value == "*") _.each(this.props.values, function (v) {
+                return buckets[v] = 0;
+            });else if (value != "") _.chain(this.props.values).map(function (v) {
+                return Math.floor(v / value);
+            }).uniq().map(function (v) {
+                return v * value;
+            }).sortBy().each(function (v) {
+                return buckets[v] = 0;
+            });
+            this.props.update(function (s) {
+                return s.header["buckets"] = buckets;
             });
         }
     }, {
@@ -749,6 +819,8 @@ var FieldEditor = (function (_React$Component7) {
                         { fluid: true },
                         React.createElement(Field, _extends({ title: "Text" }, props)),
                         React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use distinct values" })),
+                        React.createElement(Field, _extends({ title: "Bucket Multiplier" }, props)),
+                        React.createElement(Buckets, { buckets: this.state.header.buckets }),
                         React.createElement(Field, _extends({ title: "» Math", name: "math" }, props)),
                         React.createElement(Field, _extends({ title: "» Distance To", name: "distanceTo" }, props))
                     )
@@ -774,8 +846,63 @@ var FieldEditor = (function (_React$Component7) {
     return FieldEditor;
 })(React.Component);
 
-var Field = (function (_React$Component8) {
-    _inherits(Field, _React$Component8);
+var Buckets = (function (_React$Component8) {
+    _inherits(Buckets, _React$Component8);
+
+    function Buckets() {
+        _classCallCheck(this, Buckets);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(Buckets).apply(this, arguments));
+    }
+
+    _createClass(Buckets, [{
+        key: "update",
+        value: function update() {}
+    }, {
+        key: "render",
+        value: function render() {
+            var _this19 = this;
+
+            if (!this.props.buckets) return false;
+            var buckets = [];
+            _.chain(this.props.buckets).keys().first(12).each(function (bucket) {
+                buckets.push(React.createElement(
+                    Col,
+                    { md: 2 },
+                    bucket
+                ));
+                buckets.push(React.createElement(
+                    Col,
+                    { md: 2 },
+                    React.createElement("input", { type: "text", defaultValue: _this19.props.buckets[bucket], onChange: _this19.update })
+                ));
+            });
+            return React.createElement(
+                Row,
+                null,
+                React.createElement(
+                    Col,
+                    { md: 3, className: "title" },
+                    "Bucket values"
+                ),
+                React.createElement(
+                    Col,
+                    { md: 9, className: "values" },
+                    React.createElement(
+                        Grid,
+                        { fluid: true },
+                        buckets
+                    )
+                )
+            );
+        }
+    }]);
+
+    return Buckets;
+})(React.Component);
+
+var Field = (function (_React$Component9) {
+    _inherits(Field, _React$Component9);
 
     function Field() {
         _classCallCheck(this, Field);
@@ -803,7 +930,7 @@ var Field = (function (_React$Component8) {
                 ),
                 React.createElement(
                     Col,
-                    { md: 8, className: "values" },
+                    { md: 9, className: "values" },
                     React.createElement("input", { type: "text", defaultValue: this.props.header[fieldname],
                         onChange: _.bind(this.props.update, null, fieldname) }),
                     desc
@@ -814,33 +941,4 @@ var Field = (function (_React$Component8) {
 
     return Field;
 })(React.Component);
-
-/*
-
-var App = React.createClass({
-
-
-    updateBuckets(content) {
-        _.chain(content.fields)
-            .filter(f => f.bucketSize !== undefined)
-            .each(f => {
-                var id = f._id,
-                    buckets = f.buckets || {}, // [bucket] = weighting value
-                    size = f.bucketSize,
-                    vals = _.chain(content.listings)
-                            .pluck(id)
-                            .uniq()
-                            .value()
-                if (size == "*") {
-                    _.each(vals, v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
-                } else {
-                    _.chain(content.listings).pluck(id).uniq()
-                        .map(v => Math.floor(v / size)).uniq()
-                        .map(v => v * size).sortBy()
-                        .each(v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
-                }
-            })
-    },
-,
-*/
 //# sourceMappingURL=/Users/michaelfranklin/Developer/personal/python/house/static/listing.js.map

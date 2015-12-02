@@ -22,7 +22,14 @@ class ListingApp {
                 $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api)
                 ReactDOM.render(
                   <App {...content}/>,
-                  document.getElementById('content')
+                  document.getElementById('content'),
+                  () => {
+                      $('.fancybox-media').fancybox({
+                  		openEffect  : 'none',
+                  		closeEffect : 'none',
+                  		helpers : { media : {}}
+                  	});
+                  }
                 );
             }.bind(this))
             .fail(function() {
@@ -66,12 +73,16 @@ class Header extends React.Component {
     }
     render() {
         var items = _.map(this.props.headers, (header) => {
-                            return (<HeaderItem
-                                        save={this.props.save}
-                                        hide={this.props.hide}
-                                        canMove={this.props.canMove}
-                                        key={header._id}
-                                        header={header}/>)})
+                        var values =  _.chain(this.props.listings)
+                                        .pluck(header._id)
+                                        .uniq().value() // unique values for bucketing
+                        return (<HeaderItem
+                                save={this.props.save}
+                                hide={this.props.hide}
+                                canMove={this.props.canMove}
+                                key={header._id}
+                                values={values}
+                                header={header}/>)})
         return (<Row className="header">{items}</Row>);
     }
 }
@@ -110,6 +121,7 @@ class HeaderItem extends React.Component {
                     <i className="fa fa-bolt"/>
                 </div>
                 <FieldEditor
+                    values={this.props.values}
                     showModal={this.state.showModal}
                     header={this.state.header}
                     update={_.bind(this.updateState, this)}
@@ -125,8 +137,10 @@ class Control extends React.Component {
     }
     render() {
         if (!this.props) return false
-        var moveStyle = this.props.canMove ? "success" : "default",
-            curStyle = this.props.currentActivesOnly ? "success" : "default",
+        var opts = ["default", "success"],
+            moveStyle = opts[+!!this.props.canMove],
+            curStyle = opts[+!!this.props.currentActivesOnly],
+            rankStyle = opts[+!!this.props.canRank],
             hidden = _.map(this.props.hidden, (header) => {
                 return (<MenuItem
                             key={header._id}
@@ -135,19 +149,33 @@ class Control extends React.Component {
                         </MenuItem>)
             });
         return (
-            <Row className="control">
+            <Row className="control" style={{top: this.props.canMove * 20 + 34}}>
                 <Col md={5} mdOffset={7}>
                     <span className="pull-right">
-                        <Button bsStyle="info" onClick={_.bind(this.signal, this, "newField")}>
+                        <Button
+                            bsStyle={rankStyle}
+                            onClick={_.bind(this.props.toggleRank)}>
+                            Rank
+                        </Button>
+                        <Button
+                            bsStyle="info"
+                            onClick={_.bind(this.signal, this, "newField")}>
                             New Field
                         </Button>
-                        <Button bsStyle={curStyle} onClick={this.props.toggleCurrentActives}>
+                        <Button
+                            bsStyle={curStyle}
+                            onClick={this.props.toggleCurrentActives}>
                             Current Actives
                         </Button>
-                        <Button bsStyle={moveStyle} onClick={this.props.toggleMove}>
+                        <Button
+                            bsStyle={moveStyle}
+                            onClick={this.props.toggleMove}>
                             Toggle move
                         </Button>
-                        <DropdownButton pullRight title="Unhide" id="unhide">
+                        <DropdownButton
+                            pullRight
+                            title="Unhide"
+                            id="unhide">
                         {hidden}
                         </DropdownButton>
                     </span>
@@ -161,6 +189,7 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = _.map(this.props.headers, header => (
                 <ListingItem
+                    api={this.props.api}
                     key={header._id}
                     keys={this.props.keys}
                     redfin={header.redfin}
@@ -184,15 +213,25 @@ class ListingItem extends React.Component {
     }
     // formatter_lot_size(value) {return String(100000 + parseInt(value || 0)).substr(1) }
     formatter_new_35(value, listing, keys, header) {
-        var url = "https://www.google.com/maps/dir/"
-                    + listing[keys.latitude] + "," + listing[keys.longitude] + "/"
-                    + header.distanceTo;
-        return <a href={url} target="_blank">{value}</a>
+        var url = "https://www.google.com/maps"
+                    + "?saddr=" + listing[keys.latitude] + "," + listing[keys.longitude]
+                    + "&daddr=" + header.distanceTo + "&output=embed";
+        return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">{value}</a>
+    }
+    formatter_address(value, listing, keys, header, apikey) {
+        var url = "https://www.google.com/maps"
+                    + "?q=" + listing[keys.latitude] + "," + listing[keys.longitude]
+                    + "&output=embed";
+        // var url = "http://maps.googleapis.com/maps/api/streetview?size=800x500"
+        //             + "&location=" + listing[keys.latitude] + "," + listing[keys.longitude]
+        //             + "&key=" + apikey
+        return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">{value}</a>
+
     }
     formatter(value, listing, keys, header) {
         return (this["formatter_" + header.redfin.replace(/\s/g,"_")]
                 || this["formatter_" + (typeof value)]
-                || this.formatter_undef)(value, listing, keys, header)
+                || this.formatter_undef)(value, listing, keys, header, this.props.api)
     }
     render() {
         if (!this.props) return false
@@ -216,9 +255,10 @@ class App extends React.Component {
             [displayable, hidden] = _.partition(props.headers, h => h.show),
             listings = this.updateMath(_.clone(props))
 
-        this.state = {currentActivesOnly: true, canMove: false,
+        this.state = {currentActivesOnly: true, canMove: false, canRank: false,
                         headers: displayable, hidden: hidden,
-                        maxDate: maxDate, allListings: listings}
+                        maxDate: maxDate, allListings: listings,
+                        apikey: props.api}
         this.state.listings =  _.chain(listings)
                                 .filter(l => !cao || l[dt].$date == maxDate
                                                 && l[keys.status].toLowerCase() == "active")
@@ -229,6 +269,10 @@ class App extends React.Component {
             this.updateState(s => s.headers[id][redfin] = value,
                             () => this.saveHeaderValue(null, redfin, id, value)))
         _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
+    }
+    toggleRank() {
+        this.setState({canRank: !this.state.canRank})
+        this.updateState(s => s.canRank = !s.canRank)
     }
     getListingSortValue(listing, headers) {
         return _.chain(headers)
@@ -405,6 +449,7 @@ class App extends React.Component {
     render() {
         var listings = _.map(this.state.listings, listing => (
                 <Listing
+                    api={this.props.api}
                     key={listing[0]}
                     keys={this.props.keys}
                     listing={listing}
@@ -414,15 +459,19 @@ class App extends React.Component {
                 <Header
                     headers={this.state.headers}
                     canMove={this.state.canMove}
+                    listings={this.state.listings}
                     save={_.bind(this.saveHeader, this)}
                     hide={_.bind(this.hideHeader, this)}/>
                 <Control
                     hidden={this.state.hidden}
+                    canRank={this.state.canRank}
                     canMove={this.state.canMove}
                     showHeader={_.bind(this.showHeader, this)}
                     currentActivesOnly={this.state.currentActivesOnly}
                     toggleMove={_.bind(this.toggleMove, this)}
+                    toggleRank={_.bind(this.toggleRank, this)}
                     toggleCurrentActives={_.bind(this.toggleCurrentActives, this)}/>
+                <div style={{paddingTop: this.state.canMove * 20 + 68}}/>
                 {listings}
             </Grid>
         )
@@ -438,8 +487,18 @@ class FieldEditor extends React.Component {
         this.setState(_.clone(nextProps))
     }
     updateFieldValue(name, event) {
-        this.props.update(s => s.header[name] = event.target.value)
+        var buckets = {},
+            value = event.target.value;
+        this.props.update(s => s.header[name] = value)
+        if (name != "bucketSize") return
+        if (value == "*") _.each(this.props.values, v => buckets[v] = 0)
+        else if (value != "") _.chain(this.props.values)
+                                    .map(v => Math.floor(v / value)).uniq()
+                                    .map(v => v * value).sortBy()
+                                    .each(v => buckets[v] = 0)
+        this.props.update(s => s.header["buckets"] = buckets)
     }
+
     render() {
         var header = this.state.header,
             id = header._id,
@@ -453,6 +512,8 @@ class FieldEditor extends React.Component {
                     <Grid fluid={true}>
                         <Field title="Text" {...props}/>
                         <Field title="Bucket Size" {...props} text="* = use distinct values"/>
+                        <Field title="Bucket Multiplier" {...props}/>
+                        <Buckets buckets={this.state.header.buckets}/>
                         <Field title="&raquo; Math" name="math" {...props}/>
                         <Field title="&raquo; Distance To" name="distanceTo" {...props}/>
                     </Grid>
@@ -466,6 +527,34 @@ class FieldEditor extends React.Component {
     }
 }
 
+class Buckets extends React.Component {
+    update() {
+
+    }
+    render() {
+        if (!this.props.buckets) return false
+        var buckets = [];
+        _.chain(this.props.buckets)
+            .keys()
+            .first(12)
+            .each( bucket => {
+                buckets.push(<Col md={2}>{bucket}</Col>)
+                buckets.push(<Col md={2}>
+                                <input type="text" defaultValue={this.props.buckets[bucket]} onChange={this.update}/>
+                            </Col>)})
+        return (
+            <Row>
+                <Col md={3} className="title">Bucket values</Col>
+                <Col md={9} className="values">
+                    <Grid fluid={true}>
+                        {buckets}
+                    </Grid>
+                </Col>
+            </Row>
+        )
+    }
+}
+
 class Field extends React.Component {
     render() {
         if (!this.props) return false;
@@ -475,7 +564,7 @@ class Field extends React.Component {
         return (
             <Row>
                 <Col md={3} className="title">{this.props.title}</Col>
-                <Col md={8} className="values">
+                <Col md={9} className="values">
                     <input type="text" defaultValue={this.props.header[fieldname]}
                             onChange={_.bind(this.props.update, null, fieldname)}/>
                     {desc}
@@ -484,33 +573,3 @@ class Field extends React.Component {
         )
     }
 }
-
-
-/*
-
-var App = React.createClass({
-
-
-    updateBuckets(content) {
-        _.chain(content.fields)
-            .filter(f => f.bucketSize !== undefined)
-            .each(f => {
-                var id = f._id,
-                    buckets = f.buckets || {}, // [bucket] = weighting value
-                    size = f.bucketSize,
-                    vals = _.chain(content.listings)
-                            .pluck(id)
-                            .uniq()
-                            .value()
-                if (size == "*") {
-                    _.each(vals, v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
-                } else {
-                    _.chain(content.listings).pluck(id).uniq()
-                        .map(v => Math.floor(v / size)).uniq()
-                        .map(v => v * size).sortBy()
-                        .each(v => buckets[v] = buckets[v] === undefined ? 0 : buckets[v])
-                }
-            })
-    },
-,
-*/
