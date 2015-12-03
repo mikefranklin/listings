@@ -36,6 +36,7 @@ var ListingApp = (function () {
             headersSorted: new signals.Signal(),
             headerUpdated: new signals.Signal()
         };
+        this.colors = ["#CBEAF6", "#B9E3F3", "#A8DCF0", "#96D5ED", "#87CEEB", "#73C7E7", "#62BFE4", "#51B8E1", "#3FB1DE", "#2EAADC"];
         return this;
     }
 
@@ -310,6 +311,7 @@ var Listing = (function (_React$Component4) {
             if (!this.props) return false;
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(ListingItem, {
+                    canRank: _this7.props.canRank,
                     api: _this7.props.api,
                     key: header._id,
                     keys: _this7.props.keys,
@@ -408,11 +410,18 @@ var ListingItem = (function (_React$Component5) {
         key: "render",
         value: function render() {
             if (!this.props) return false;
-            var value = this.props.listing[this.props.header._id];
-
+            var p = this.props,
+                h = p.header,
+                value = p.listing[h._id],
+                style = { overflow: "hidden", height: 20, whiteSpace: "nowrap" },
+                bucket;
+            if (p.canRank && h.bucketSize && h.buckets) {
+                bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize];
+                if (bucket) _.extend(style, { backgroundColor: bucket[1] });
+            }
             return React.createElement(
                 Col,
-                { md: 1, style: { overflow: "hidden", height: 20, whiteSpace: "nowrap" } },
+                { md: 1, style: style },
                 this.formatter(value, this.props.listing, this.props.keys, this.props.header)
             );
         }
@@ -453,7 +462,7 @@ var App = (function (_React$Component6) {
         _this9.state.listings = _.chain(listings).filter(function (l) {
             return !cao || l[dt].$date == maxDate && l[keys.status].toLowerCase() == "active";
         }).sortBy(function (l) {
-            return _this9.getListingSortValue(l, _this9.state.headers);
+            return _this9.getListingSortValue(l, _this9.state.headers, _this9.state.canRank);
         }).value();
         app.signaller.headersSorted.add(_.bind(_this9.reorderHeaders, _this9));
         app.signaller.headerUpdated.add(function (id, redfin, value) {
@@ -470,25 +479,43 @@ var App = (function (_React$Component6) {
     _createClass(App, [{
         key: "toggleRank",
         value: function toggleRank() {
-            this.setState({ canRank: !this.state.canRank });
-            this.updateState(function (s) {
-                return s.canRank = !s.canRank;
+            var _this10 = this;
+
+            var state = _.clone(this.state),
+                canRank = !state.canRank;
+            state.canRank = canRank;
+            state.listings = _.sortBy(state.listings, function (l) {
+                return _this10.getListingSortValue(l, state.headers, canRank);
             });
+            this.setState(state);
         }
     }, {
         key: "getListingSortValue",
-        value: function getListingSortValue(listing, headers) {
-            return _.chain(headers).first(6).map(function (h) {
+        value: function getListingSortValue(listing, headers, canRank) {
+            var res;
+            if (!canRank) return _.chain(headers).first(6).map(function (h) {
                 return listing[h._id];
             }).map(function (value) {
                 return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
                 );
             }).value().join("$");
+            res = _.reduce(headers, function (ranking, h) {
+                var rank = 0,
+                    bucket;
+                if (h.bucketSize && h.buckets) {
+                    bucket = h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize];
+                    if (bucket) rank = parseInt(bucket[0]) + parseInt(h.bucketMultiplier || 1);
+                }
+                return ranking - rank;
+            } //reverse sort
+            , 0);
+            console.log("rank", res);
+            return res;
         }
     }, {
         key: "updateDistances",
         value: function updateDistances(opts) {
-            var _this10 = this;
+            var _this11 = this;
 
             if (!opts) {
                 var lat = this.props.keys.latitude,
@@ -532,10 +559,10 @@ var App = (function (_React$Component6) {
                     console.log("error getting directions for", listing, e);
                     duration = 0;
                 }
-                var state = _.clone(_this10.state);
+                var state = _.clone(_this11.state);
                 state.listings[index][id] = duration;
-                _this10.setState(state);
-                _this10.updateListingDB(listing_id, headerName, duration);
+                _this11.setState(state);
+                _this11.updateListingDB(listing_id, headerName, duration);
             });
 
             _.delay(_.bind(this.updateDistances, this), opts.wait, opts);
@@ -574,7 +601,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleCurrentActives",
         value: function toggleCurrentActives() {
-            var _this11 = this;
+            var _this12 = this;
 
             var state = _.clone(this.state),
                 keys = this.props.keys,
@@ -584,7 +611,7 @@ var App = (function (_React$Component6) {
             state.listings = _.chain(state.allListings).filter(function (l) {
                 return !state.currentActivesOnly || l[dt].$date == state.maxDate && l[keys.status].toLowerCase() == "active";
             }).sortBy(function (l) {
-                return _this11.getListingSortValue(l, state.headers);
+                return _this12.getListingSortValue(l, state.headers, state.canRank);
             }).value();
 
             this.setState(state);
@@ -599,36 +626,36 @@ var App = (function (_React$Component6) {
     }, {
         key: "showHeader",
         value: function showHeader(id) {
-            var _this12 = this;
+            var _this13 = this;
 
             this.updateState(function (s) {
-                return _this12.toggleHeaderVisibility(s.hidden, s.headers, id, true);
+                return _this13.toggleHeaderVisibility(s.hidden, s.headers, id, true);
             }, function () {
-                return _this12.saveHeaderValue(null, "show", id, true);
+                return _this13.saveHeaderValue(null, "show", id, true);
             });
         }
     }, {
         key: "hideHeader",
         value: function hideHeader(id) {
-            var _this13 = this;
+            var _this14 = this;
 
             this.updateState(function (s) {
-                return _this13.toggleHeaderVisibility(s.headers, s.hidden, id, true);
+                return _this14.toggleHeaderVisibility(s.headers, s.hidden, id, true);
             }, function () {
-                return _this13.saveHeaderValue(null, "show", id, false);
+                return _this14.saveHeaderValue(null, "show", id, false);
             });
         }
     }, {
         key: "saveHeader",
         value: function saveHeader(header) {
-            var _this14 = this;
+            var _this15 = this;
 
             this.updateState(function (s) {
                 return s.headers[_.findIndex(s.headers, function (h) {
                     return h._id == header._id;
                 })] = header;
             }, function () {
-                return _this14.saveHeader(header);
+                return _this15.saveHeader(header);
             });
         }
     }, {
@@ -650,7 +677,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "reorderHeaders",
         value: function reorderHeaders(sortNode) {
-            var _this15 = this;
+            var _this16 = this;
 
             var ids = sortNode.sortable("toArray", { attribute: "data-id" }),
                 state = _.clone(this.state);
@@ -663,7 +690,7 @@ var App = (function (_React$Component6) {
             state.headers = _.sortBy(state.headers, "sequence");
             sortNode.sortable("cancel");
             state.listings = _.sortBy(state.listings, function (l) {
-                return _this15.getListingSortValue(l, state.headers);
+                return _this16.getListingSortValue(l, state.headers, state.canRank);
             });
             this.setState(state);
             this.saveHeaderValue(state.headers, "sequence");
@@ -717,15 +744,16 @@ var App = (function (_React$Component6) {
     }, {
         key: "render",
         value: function render() {
-            var _this16 = this;
+            var _this17 = this;
 
             var listings = _.map(this.state.listings, function (listing) {
                 return React.createElement(Listing, {
-                    api: _this16.props.api,
+                    canRank: _this17.state.canRank,
+                    api: _this17.props.api,
                     key: listing[0],
-                    keys: _this16.props.keys,
+                    keys: _this17.props.keys,
                     listing: listing,
-                    headers: _this16.state.headers });
+                    headers: _this17.state.headers });
             });
             return React.createElement(
                 Grid,
@@ -760,10 +788,10 @@ var FieldEditor = (function (_React$Component7) {
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this17 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this17.state = _.clone(props);
-        return _this17;
+        _this18.state = _.clone(props);
+        return _this18;
     }
 
     _createClass(FieldEditor, [{
@@ -787,10 +815,30 @@ var FieldEditor = (function (_React$Component7) {
             }).uniq().map(function (v) {
                 return v * value;
             }).sortBy().each(function (v) {
-                return buckets[v] = 0;
+                return buckets[v] = [0, ""];
             });
             this.props.update(function (s) {
                 return s.header["buckets"] = buckets;
+            });
+        }
+    }, {
+        key: "updateBuckets",
+        value: function updateBuckets(bucket, event) {
+            this.props.update(function (s) {
+                s.header["buckets"][bucket] = [event.target.value, ""];
+                var buckets = s.header.buckets,
+                    min = !buckets ? 0 : _.min(buckets, function (wc) {
+                    return +wc[0];
+                })[0],
+                    max = !buckets ? 0 : _.max(buckets, function (wc) {
+                    return +wc[0];
+                })[0],
+                    mult = !max ? 0 : (app.colors.length - 2) / (max - min);
+                s.header.buckets = _.mapObject(buckets, function (data) {
+                    var wc = typeof data == "number" ? [data, ""] : data,
+                        color = wc[0] == min ? app.colors[0] : wc[0] && wc[0] == max ? app.colors[app.colors.length - 1] : app.colors[Math.floor((wc[0] - min + 1) * mult)];
+                    return [wc[0], color];
+                });
             });
         }
     }, {
@@ -820,7 +868,9 @@ var FieldEditor = (function (_React$Component7) {
                         React.createElement(Field, _extends({ title: "Text" }, props)),
                         React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use distinct values" })),
                         React.createElement(Field, _extends({ title: "Bucket Multiplier" }, props)),
-                        React.createElement(Buckets, { buckets: this.state.header.buckets }),
+                        React.createElement(Buckets, {
+                            buckets: this.state.header.buckets,
+                            updateBuckets: _.bind(this.updateBuckets, this) }),
                         React.createElement(Field, _extends({ title: "» Math", name: "math" }, props)),
                         React.createElement(Field, _extends({ title: "» Distance To", name: "distanceTo" }, props))
                     )
@@ -856,25 +906,31 @@ var Buckets = (function (_React$Component8) {
     }
 
     _createClass(Buckets, [{
-        key: "update",
-        value: function update() {}
-    }, {
         key: "render",
         value: function render() {
-            var _this19 = this;
+            var _this20 = this;
 
             if (!this.props.buckets) return false;
             var buckets = [];
-            _.chain(this.props.buckets).keys().first(12).each(function (bucket) {
+            _.each(this.props.buckets, function (wc, bucket) {
+                // bucket = [weight, color]
                 buckets.push(React.createElement(
                     Col,
-                    { md: 2 },
+                    {
+                        key: "b" + bucket,
+                        md: 2,
+                        style: { backgroundColor: wc[1], height: 26, paddingTop: 3 } },
                     bucket
                 ));
                 buckets.push(React.createElement(
                     Col,
-                    { md: 2 },
-                    React.createElement("input", { type: "text", defaultValue: _this19.props.buckets[bucket], onChange: _this19.update })
+                    {
+                        key: "v" + bucket,
+                        md: 2 },
+                    React.createElement("input", {
+                        type: "text",
+                        defaultValue: wc[0],
+                        onChange: _.bind(_this20.props.updateBuckets, null, bucket) })
                 ));
             });
             return React.createElement(

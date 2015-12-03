@@ -14,6 +14,7 @@ class ListingApp {
             headersSorted: new signals.Signal(),
             headerUpdated: new signals.Signal()
         }
+        this.colors = ["#CBEAF6","#B9E3F3","#A8DCF0","#96D5ED","#87CEEB","#73C7E7","#62BFE4","#51B8E1","#3FB1DE","#2EAADC"]
         return this
     }
     loadAndRenderData() {
@@ -189,6 +190,7 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = _.map(this.props.headers, header => (
                 <ListingItem
+                    canRank={this.props.canRank}
                     api={this.props.api}
                     key={header._id}
                     keys={this.props.keys}
@@ -235,10 +237,17 @@ class ListingItem extends React.Component {
     }
     render() {
         if (!this.props) return false
-        var value = this.props.listing[this.props.header._id]
-
+        var p = this.props,
+            h = p.header,
+            value = p.listing[h._id],
+            style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
+            bucket;
+            if (p.canRank && h.bucketSize && h.buckets) {
+                bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize]
+                if (bucket) _.extend(style, {backgroundColor: bucket[1]})
+            }
         return (
-            <Col md={1} style={{overflow: "hidden", height: 20, whiteSpace: "nowrap"}} >
+            <Col md={1} style={style}>
                 {this.formatter(value, this.props.listing, this.props.keys, this.props.header)}
             </Col>
         )
@@ -262,7 +271,7 @@ class App extends React.Component {
         this.state.listings =  _.chain(listings)
                                 .filter(l => !cao || l[dt].$date == maxDate
                                                 && l[keys.status].toLowerCase() == "active")
-                                .sortBy(l => this.getListingSortValue(l, this.state.headers))
+                                .sortBy(l => this.getListingSortValue(l, this.state.headers, this.state.canRank))
                                 .value()
         app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
         app.signaller.headerUpdated.add((id, redfin, value) =>
@@ -271,16 +280,31 @@ class App extends React.Component {
         _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
     }
     toggleRank() {
-        this.setState({canRank: !this.state.canRank})
-        this.updateState(s => s.canRank = !s.canRank)
+        var state = _.clone(this.state),
+            canRank = !state.canRank;
+        state.canRank = canRank
+        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, canRank))
+        this.setState(state)
     }
-    getListingSortValue(listing, headers) {
-        return _.chain(headers)
-                .first(6)
-                .map(h => listing[h._id])
-                .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
-                .value()
-                .join("$")
+    getListingSortValue(listing, headers, canRank) {
+        var res;
+        if (!canRank) return _.chain(headers)
+                        .first(6)
+                        .map(h => listing[h._id])
+                        .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
+                        .value()
+                        .join("$")
+        res = _.reduce(headers, (ranking, h) => {
+                        var rank = 0,
+                            bucket;
+                        if (h.bucketSize && h.buckets) {
+                            bucket = h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize]
+                            if (bucket) rank = parseInt(bucket[0]) + parseInt(h.bucketMultiplier || 1)
+                        }
+                    return ranking - rank} //reverse sort
+                , 0)
+        console.log("rank", res);
+        return res;
     }
     updateDistances(opts) {
         if (!opts) {
@@ -358,7 +382,7 @@ class App extends React.Component {
                             .filter(l => !state.currentActivesOnly
                                             || l[dt].$date == state.maxDate
                                             && l[keys.status].toLowerCase() == "active")
-                            .sortBy(l => this.getListingSortValue(l, state.headers))
+                            .sortBy(l => this.getListingSortValue(l, state.headers, state.canRank))
                             .value()
 
         this.setState(state)
@@ -399,7 +423,7 @@ class App extends React.Component {
         })
         state.headers = _.sortBy(state.headers, "sequence")
         sortNode.sortable("cancel");
-        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers))
+        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, state.canRank))
         this.setState(state);
         this.saveHeaderValue(state.headers, "sequence")
     }
@@ -449,6 +473,7 @@ class App extends React.Component {
     render() {
         var listings = _.map(this.state.listings, listing => (
                 <Listing
+                    canRank={this.state.canRank}
                     api={this.props.api}
                     key={listing[0]}
                     keys={this.props.keys}
@@ -495,8 +520,24 @@ class FieldEditor extends React.Component {
         else if (value != "") _.chain(this.props.values)
                                     .map(v => Math.floor(v / value)).uniq()
                                     .map(v => v * value).sortBy()
-                                    .each(v => buckets[v] = 0)
+                                    .each(v => buckets[v] = [0, ""])
         this.props.update(s => s.header["buckets"] = buckets)
+    }
+    updateBuckets(bucket, event) {
+        this.props.update(s => {
+            s.header["buckets"][bucket] = [event.target.value, ""]
+            var buckets = s.header.buckets,
+                min = !buckets ? 0 : _.min(buckets, wc => +wc[0])[0],
+                max = !buckets ? 0 : _.max(buckets, wc => +wc[0])[0],
+                mult = !max ? 0 : (app.colors.length - 2) / (max - min);
+            s.header.buckets = _.mapObject(buckets, data => {
+                var wc = typeof data == "number" ? [data, ""] : data,
+                color = wc[0] == min ? app.colors[0] :
+                    wc[0] && wc[0] == max ? app.colors[app.colors.length-1]
+                        : app.colors[Math.floor((wc[0] - min + 1) * mult)]
+                return [wc[0], color]
+            })
+        })
     }
 
     render() {
@@ -513,7 +554,9 @@ class FieldEditor extends React.Component {
                         <Field title="Text" {...props}/>
                         <Field title="Bucket Size" {...props} text="* = use distinct values"/>
                         <Field title="Bucket Multiplier" {...props}/>
-                        <Buckets buckets={this.state.header.buckets}/>
+                        <Buckets
+                            buckets={this.state.header.buckets}
+                            updateBuckets={_.bind(this.updateBuckets, this)}/>
                         <Field title="&raquo; Math" name="math" {...props}/>
                         <Field title="&raquo; Distance To" name="distanceTo" {...props}/>
                     </Grid>
@@ -528,20 +571,24 @@ class FieldEditor extends React.Component {
 }
 
 class Buckets extends React.Component {
-    update() {
-
-    }
     render() {
         if (!this.props.buckets) return false
         var buckets = [];
-        _.chain(this.props.buckets)
-            .keys()
-            .first(12)
-            .each( bucket => {
-                buckets.push(<Col md={2}>{bucket}</Col>)
-                buckets.push(<Col md={2}>
-                                <input type="text" defaultValue={this.props.buckets[bucket]} onChange={this.update}/>
-                            </Col>)})
+        _.each(this.props.buckets, (wc, bucket) => { // bucket = [weight, color]
+            buckets.push(<Col
+                            key={"b" + bucket}
+                            md={2}
+                            style={{backgroundColor: wc[1], height: 26, paddingTop: 3}}>
+                            {bucket}
+                            </Col>)
+            buckets.push(<Col
+                            key={"v" + bucket}
+                            md={2}>
+                            <input
+                                type="text"
+                                defaultValue={wc[0]}
+                                onChange={_.bind(this.props.updateBuckets, null, bucket)}/>
+                        </Col>)})
         return (
             <Row>
                 <Col md={3} className="title">Bucket values</Col>

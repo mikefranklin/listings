@@ -142,17 +142,21 @@ def save_header():
     return json.dumps(list(res))
 
 
+@app.route('/import/<option>')
 @app.route('/import')
-def import_redfin():
+def import_redfin(option=None):
     " load & save the latest redfin CSV "
 
     listings, filedate = load_latest_listings()
-    res = save_listings(listings, filedate)
+    res = save_listings(listings, filedate, delete=(option == "delete"))
     return json.dumps(res)
 
 
-def save_listings(listings, date):
+def save_listings(listings, date, delete):
     " update house info "
+
+    if delete:
+        mongo.db.listings.drop()
 
     bulk = mongo.db.listings.initialize_unordered_bulk_op()
 
