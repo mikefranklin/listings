@@ -78,6 +78,7 @@ class Header extends React.Component {
                                         .pluck(header._id)
                                         .uniq().value() // unique values for bucketing
                         return (<HeaderItem
+                                showUK={this.props.showUK}
                                 save={this.props.save}
                                 hide={this.props.hide}
                                 canMove={this.props.canMove}
@@ -105,7 +106,9 @@ class HeaderItem extends React.Component {
     }
     closeFieldEditor(header) {
         this.updateState(s => _.extend(s, header || {}, {showModal: false}))
-        if (header) this.props.save(_.omit(this.state.header, "showModal"))
+        if (header) {
+            this.props.save(_.omit(this.state.header, "showModal", "updateRanking"), this.state.updateRanking)
+        }
     }
     render() {
         var header = this.props.header,
@@ -116,7 +119,7 @@ class HeaderItem extends React.Component {
             <Col md={1} data-id={header._id} className="item">
                 {this.props.canMove ? move : null}
                 <div className="edit" onClick={_.bind(this.openFieldEditor, this)}>
-                    {header.text}
+                    {this.props.showUK && header.ukText ? header.ukText : header.text}
                 </div>
                 <div className="togglevis" onClick={_.bind(this.props.hide, null, header._id)}>
                     <i className="fa fa-bolt"/>
@@ -142,6 +145,7 @@ class Control extends React.Component {
             moveStyle = opts[+!!this.props.canMove],
             curStyle = opts[+!!this.props.currentActivesOnly],
             rankStyle = opts[+!!this.props.canRank],
+            ukStyle = opts[+!!this.props.showUK],
             hidden = _.map(this.props.hidden, (header) => {
                 return (<MenuItem
                             key={header._id}
@@ -151,11 +155,16 @@ class Control extends React.Component {
             });
         return (
             <Row className="control" style={{top: this.props.canMove * 20 + 34}}>
-                <Col md={5} mdOffset={7}>
+                <Col md={12}>
                     <span className="pull-right">
                         <Button
+                            bsStyle={ukStyle}
+                            onClick={this.props.toggleUK}>
+                            UK
+                        </Button>
+                        <Button
                             bsStyle={rankStyle}
-                            onClick={_.bind(this.props.toggleRank)}>
+                            onClick={this.props.toggleRank}>
                             Rank
                         </Button>
                         <Button
@@ -190,6 +199,7 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = _.map(this.props.headers, header => (
                 <ListingItem
+                    showUK={this.props.showUK}
                     canRank={this.props.canRank}
                     api={this.props.api}
                     key={header._id}
@@ -204,8 +214,12 @@ class Listing extends React.Component {
 class ListingItem extends React.Component {
     formatter_undef() { return "~undefined~"}
     formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')}
-    formatter_string(s) { return s }
-    formatter_number(s) { return String(s)}
+    formatter_string(value, listing, keys, header, apikey, showUK) {
+        return showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value
+    }
+    formatter_number(value, listing, keys, header, apikey, showUK) {
+        return showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value
+    }
     formatter_object(obj) {
         var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
         return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
@@ -213,27 +227,24 @@ class ListingItem extends React.Component {
     formatter_url(url) {
         return <a href={url} target="_blank">Redfin</a>
     }
-    // formatter_lot_size(value) {return String(100000 + parseInt(value || 0)).substr(1) }
-    formatter_new_35(value, listing, keys, header) {
+    formatter_new_35(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
                     + "?saddr=" + listing[keys.latitude] + "," + listing[keys.longitude]
-                    + "&daddr=" + header.distanceTo + "&output=embed";
-        return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">{value}</a>
+                    + "&daddr=" + header.distanceTo + "&output=embed"
+        return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">
+                {showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value}
+                </a>
     }
-    formatter_address(value, listing, keys, header, apikey) {
+    formatter_address(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
                     + "?q=" + listing[keys.latitude] + "," + listing[keys.longitude]
                     + "&output=embed";
-        // var url = "http://maps.googleapis.com/maps/api/streetview?size=800x500"
-        //             + "&location=" + listing[keys.latitude] + "," + listing[keys.longitude]
-        //             + "&key=" + apikey
         return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">{value}</a>
-
     }
-    formatter(value, listing, keys, header) {
+    formatter(value, listing, keys, header, showUK) {
         return (this["formatter_" + header.redfin.replace(/\s/g,"_")]
                 || this["formatter_" + (typeof value)]
-                || this.formatter_undef)(value, listing, keys, header, this.props.api)
+                || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
     render() {
         if (!this.props) return false
@@ -248,7 +259,7 @@ class ListingItem extends React.Component {
             }
         return (
             <Col md={1} style={style}>
-                {this.formatter(value, this.props.listing, this.props.keys, this.props.header)}
+                {this.formatter(value, p.listing, p.keys, p.header, p.showUK)}
             </Col>
         )
     }
@@ -279,12 +290,15 @@ class App extends React.Component {
                             () => this.saveHeaderValue(null, redfin, id, value)))
         _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
     }
-    toggleRank() {
+    toggleRank(force) {
         var state = _.clone(this.state),
-            canRank = !state.canRank;
+            canRank = !state.canRank
         state.canRank = canRank
         state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, canRank))
         this.setState(state)
+    }
+    toggleUK() {
+        this.updateState(s => s.showUK = !s.showUK)
     }
     getListingSortValue(listing, headers, canRank) {
         var res;
@@ -294,17 +308,13 @@ class App extends React.Component {
                         .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
                         .value()
                         .join("$")
-        res = _.reduce(headers, (ranking, h) => {
-                        var rank = 0,
-                            bucket;
-                        if (h.bucketSize && h.buckets) {
-                            bucket = h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize]
-                            if (bucket) rank = parseInt(bucket[0]) + parseInt(h.bucketMultiplier || 1)
-                        }
-                    return ranking - rank} //reverse sort
-                , 0)
+        res = _.chain(headers)
+                .filter(h => h.bucketSize && h.buckets)
+                .reduce((ranking, h) => ranking - (parseInt(h.buckets[Math.floor(listing[h._id] / h.bucketSize)
+                                            * h.bucketSize] || 0) * parseInt(h.bucketMultiplier || 1)), 0)
+                .value()
         console.log("rank", res);
-        return res;
+        return res
     }
     updateDistances(opts) {
         if (!opts) {
@@ -427,10 +437,11 @@ class App extends React.Component {
         this.setState(state);
         this.saveHeaderValue(state.headers, "sequence")
     }
-    saveHeader(header) {
+    saveHeader(header, updateRanking) {
         app.retryAjax(JSON.stringify(header), {api: "/saveheader", type: "post"})
             .done(function(content) {
                 console.log("saving header worked!", header, arguments)
+                if (updateRanking && this.state.canRank) this.toggleRank(true)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
@@ -474,6 +485,7 @@ class App extends React.Component {
         var listings = _.map(this.state.listings, listing => (
                 <Listing
                     canRank={this.state.canRank}
+                    showUK={this.state.showUK}
                     api={this.props.api}
                     key={listing[0]}
                     keys={this.props.keys}
@@ -485,14 +497,17 @@ class App extends React.Component {
                     headers={this.state.headers}
                     canMove={this.state.canMove}
                     listings={this.state.listings}
+                    showUK={this.state.showUK}
                     save={_.bind(this.saveHeader, this)}
                     hide={_.bind(this.hideHeader, this)}/>
                 <Control
                     hidden={this.state.hidden}
                     canRank={this.state.canRank}
                     canMove={this.state.canMove}
+                    showUK={this.state.showUK}
                     showHeader={_.bind(this.showHeader, this)}
                     currentActivesOnly={this.state.currentActivesOnly}
+                    toggleUK={_.bind(this.toggleUK, this)}
                     toggleMove={_.bind(this.toggleMove, this)}
                     toggleRank={_.bind(this.toggleRank, this)}
                     toggleCurrentActives={_.bind(this.toggleCurrentActives, this)}/>
@@ -514,9 +529,11 @@ class FieldEditor extends React.Component {
     updateFieldValue(name, event) {
         var buckets = {},
             value = event.target.value;
-        this.props.update(s => s.header[name] = value)
+
+        if (/^bucket/.test(name)) this.props.update(s => {s.header[name] = value; s.updateRanking = true})
+        else this.props.update(s => s.header[name] = value)
         if (name != "bucketSize") return
-        if (value == "*") _.each(this.props.values, v => buckets[v] = 0)
+        if (value == "*") _.each(this.props.values, v => buckets[v] = [0, ""])
         else if (value != "") _.chain(this.props.values)
                                     .map(v => Math.floor(v / value)).uniq()
                                     .map(v => v * value).sortBy()
@@ -539,7 +556,6 @@ class FieldEditor extends React.Component {
             })
         })
     }
-
     render() {
         var header = this.state.header,
             id = header._id,
@@ -552,6 +568,8 @@ class FieldEditor extends React.Component {
                 <Modal.Body>
                     <Grid fluid={true}>
                         <Field title="Text" {...props}/>
+                        <Field title="UK multiplier" name="ukMultiplier" {...props}/>
+                        <Field title="UK Text" name="ukText" {...props}/>
                         <Field title="Bucket Size" {...props} text="* = use distinct values"/>
                         <Field title="Bucket Multiplier" {...props}/>
                         <Buckets
@@ -562,7 +580,9 @@ class FieldEditor extends React.Component {
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button onClick={_.bind(this.props.close, this, this.state.header)}>Save & Close</Button>
+                    <Button onClick={_.bind(this.props.close, this, this.state.header)}>
+                        Save & Close
+                    </Button>
                     <Button onClick={_.bind(this.props.close, this, null)}>Close</Button>
                 </Modal.Footer>
             </Modal>

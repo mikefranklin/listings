@@ -115,6 +115,7 @@ var Header = (function (_React$Component) {
             var items = _.map(this.props.headers, function (header) {
                 var values = _.chain(_this2.props.listings).pluck(header._id).uniq().value(); // unique values for bucketing
                 return React.createElement(HeaderItem, {
+                    showUK: _this2.props.showUK,
                     save: _this2.props.save,
                     hide: _this2.props.hide,
                     canMove: _this2.props.canMove,
@@ -167,7 +168,9 @@ var HeaderItem = (function (_React$Component2) {
             this.updateState(function (s) {
                 return _.extend(s, header || {}, { showModal: false });
             });
-            if (header) this.props.save(_.omit(this.state.header, "showModal"));
+            if (header) {
+                this.props.save(_.omit(this.state.header, "showModal", "updateRanking"), this.state.updateRanking);
+            }
         }
     }, {
         key: "render",
@@ -185,7 +188,7 @@ var HeaderItem = (function (_React$Component2) {
                 React.createElement(
                     "div",
                     { className: "edit", onClick: _.bind(this.openFieldEditor, this) },
-                    header.text
+                    this.props.showUK && header.ukText ? header.ukText : header.text
                 ),
                 React.createElement(
                     "div",
@@ -231,6 +234,7 @@ var Control = (function (_React$Component3) {
                 moveStyle = opts[+!!this.props.canMove],
                 curStyle = opts[+!!this.props.currentActivesOnly],
                 rankStyle = opts[+!!this.props.canRank],
+                ukStyle = opts[+!!this.props.showUK],
                 hidden = _.map(this.props.hidden, function (header) {
                 return React.createElement(
                     MenuItem,
@@ -245,15 +249,22 @@ var Control = (function (_React$Component3) {
                 { className: "control", style: { top: this.props.canMove * 20 + 34 } },
                 React.createElement(
                     Col,
-                    { md: 5, mdOffset: 7 },
+                    { md: 12 },
                     React.createElement(
                         "span",
                         { className: "pull-right" },
                         React.createElement(
                             Button,
                             {
+                                bsStyle: ukStyle,
+                                onClick: this.props.toggleUK },
+                            "UK"
+                        ),
+                        React.createElement(
+                            Button,
+                            {
                                 bsStyle: rankStyle,
-                                onClick: _.bind(this.props.toggleRank) },
+                                onClick: this.props.toggleRank },
                             "Rank"
                         ),
                         React.createElement(
@@ -311,6 +322,7 @@ var Listing = (function (_React$Component4) {
             if (!this.props) return false;
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(ListingItem, {
+                    showUK: _this7.props.showUK,
                     canRank: _this7.props.canRank,
                     api: _this7.props.api,
                     key: header._id,
@@ -351,13 +363,13 @@ var ListingItem = (function (_React$Component5) {
         }
     }, {
         key: "formatter_string",
-        value: function formatter_string(s) {
-            return s;
+        value: function formatter_string(value, listing, keys, header, apikey, showUK) {
+            return showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value;
         }
     }, {
         key: "formatter_number",
-        value: function formatter_number(s) {
-            return String(s);
+        value: function formatter_number(value, listing, keys, header, apikey, showUK) {
+            return showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value;
         }
     }, {
         key: "formatter_object",
@@ -376,25 +388,20 @@ var ListingItem = (function (_React$Component5) {
                 "Redfin"
             );
         }
-        // formatter_lot_size(value) {return String(100000 + parseInt(value || 0)).substr(1) }
-
     }, {
         key: "formatter_new_35",
-        value: function formatter_new_35(value, listing, keys, header) {
+        value: function formatter_new_35(value, listing, keys, header, apikey, showUK) {
             var url = "https://www.google.com/maps" + "?saddr=" + listing[keys.latitude] + "," + listing[keys.longitude] + "&daddr=" + header.distanceTo + "&output=embed";
             return React.createElement(
                 "a",
                 { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
-                value
+                showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value
             );
         }
     }, {
         key: "formatter_address",
-        value: function formatter_address(value, listing, keys, header, apikey) {
+        value: function formatter_address(value, listing, keys, header, apikey, showUK) {
             var url = "https://www.google.com/maps" + "?q=" + listing[keys.latitude] + "," + listing[keys.longitude] + "&output=embed";
-            // var url = "http://maps.googleapis.com/maps/api/streetview?size=800x500"
-            //             + "&location=" + listing[keys.latitude] + "," + listing[keys.longitude]
-            //             + "&key=" + apikey
             return React.createElement(
                 "a",
                 { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
@@ -403,8 +410,8 @@ var ListingItem = (function (_React$Component5) {
         }
     }, {
         key: "formatter",
-        value: function formatter(value, listing, keys, header) {
-            return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api);
+        value: function formatter(value, listing, keys, header, showUK) {
+            return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK);
         }
     }, {
         key: "render",
@@ -422,7 +429,7 @@ var ListingItem = (function (_React$Component5) {
             return React.createElement(
                 Col,
                 { md: 1, style: style },
-                this.formatter(value, this.props.listing, this.props.keys, this.props.header)
+                this.formatter(value, p.listing, p.keys, p.header, p.showUK)
             );
         }
     }]);
@@ -478,7 +485,7 @@ var App = (function (_React$Component6) {
 
     _createClass(App, [{
         key: "toggleRank",
-        value: function toggleRank() {
+        value: function toggleRank(force) {
             var _this10 = this;
 
             var state = _.clone(this.state),
@@ -490,6 +497,13 @@ var App = (function (_React$Component6) {
             this.setState(state);
         }
     }, {
+        key: "toggleUK",
+        value: function toggleUK() {
+            this.updateState(function (s) {
+                return s.showUK = !s.showUK;
+            });
+        }
+    }, {
         key: "getListingSortValue",
         value: function getListingSortValue(listing, headers, canRank) {
             var res;
@@ -499,16 +513,11 @@ var App = (function (_React$Component6) {
                 return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
                 );
             }).value().join("$");
-            res = _.reduce(headers, function (ranking, h) {
-                var rank = 0,
-                    bucket;
-                if (h.bucketSize && h.buckets) {
-                    bucket = h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize];
-                    if (bucket) rank = parseInt(bucket[0]) + parseInt(h.bucketMultiplier || 1);
-                }
-                return ranking - rank;
-            } //reverse sort
-            , 0);
+            res = _.chain(headers).filter(function (h) {
+                return h.bucketSize && h.buckets;
+            }).reduce(function (ranking, h) {
+                return ranking - parseInt(h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize] || 0) * parseInt(h.bucketMultiplier || 1);
+            }, 0).value();
             console.log("rank", res);
             return res;
         }
@@ -697,9 +706,10 @@ var App = (function (_React$Component6) {
         }
     }, {
         key: "saveHeader",
-        value: function saveHeader(header) {
+        value: function saveHeader(header, updateRanking) {
             app.retryAjax(JSON.stringify(header), { api: "/saveheader", type: "post" }).done((function (content) {
                 console.log("saving header worked!", header, arguments);
+                if (updateRanking && this.state.canRank) this.toggleRank(true);
             }).bind(this)).fail((function () {
                 console.log(arguments);
             }).bind(this));
@@ -749,6 +759,7 @@ var App = (function (_React$Component6) {
             var listings = _.map(this.state.listings, function (listing) {
                 return React.createElement(Listing, {
                     canRank: _this17.state.canRank,
+                    showUK: _this17.state.showUK,
                     api: _this17.props.api,
                     key: listing[0],
                     keys: _this17.props.keys,
@@ -762,14 +773,17 @@ var App = (function (_React$Component6) {
                     headers: this.state.headers,
                     canMove: this.state.canMove,
                     listings: this.state.listings,
+                    showUK: this.state.showUK,
                     save: _.bind(this.saveHeader, this),
                     hide: _.bind(this.hideHeader, this) }),
                 React.createElement(Control, {
                     hidden: this.state.hidden,
                     canRank: this.state.canRank,
                     canMove: this.state.canMove,
+                    showUK: this.state.showUK,
                     showHeader: _.bind(this.showHeader, this),
                     currentActivesOnly: this.state.currentActivesOnly,
+                    toggleUK: _.bind(this.toggleUK, this),
                     toggleMove: _.bind(this.toggleMove, this),
                     toggleRank: _.bind(this.toggleRank, this),
                     toggleCurrentActives: _.bind(this.toggleCurrentActives, this) }),
@@ -804,12 +818,15 @@ var FieldEditor = (function (_React$Component7) {
         value: function updateFieldValue(name, event) {
             var buckets = {},
                 value = event.target.value;
-            this.props.update(function (s) {
+
+            if (/^bucket/.test(name)) this.props.update(function (s) {
+                s.header[name] = value;s.updateRanking = true;
+            });else this.props.update(function (s) {
                 return s.header[name] = value;
             });
             if (name != "bucketSize") return;
             if (value == "*") _.each(this.props.values, function (v) {
-                return buckets[v] = 0;
+                return buckets[v] = [0, ""];
             });else if (value != "") _.chain(this.props.values).map(function (v) {
                 return Math.floor(v / value);
             }).uniq().map(function (v) {
@@ -866,6 +883,8 @@ var FieldEditor = (function (_React$Component7) {
                         Grid,
                         { fluid: true },
                         React.createElement(Field, _extends({ title: "Text" }, props)),
+                        React.createElement(Field, _extends({ title: "UK multiplier", name: "ukMultiplier" }, props)),
+                        React.createElement(Field, _extends({ title: "UK Text", name: "ukText" }, props)),
                         React.createElement(Field, _extends({ title: "Bucket Size" }, props, { text: "* = use distinct values" })),
                         React.createElement(Field, _extends({ title: "Bucket Multiplier" }, props)),
                         React.createElement(Buckets, {
