@@ -32,6 +32,15 @@
   background-color: rgb(252, 255, 212)
 }
 
+.toggleicons {
+  text-align: center;
+  margin-top: 2px;
+}
+
+.toggleicons:hover {
+  cursor: pointer
+}
+
 .control {
   background-color: #eef;
   position: fixed;

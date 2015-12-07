@@ -169,7 +169,7 @@ class Control extends React.Component {
                         </Button>
                         <Button
                             bsStyle="info"
-                            onClick={_.bind(this.signal, this, "newField")}>
+                            onClick={this.props.addNewField}>
                             New Field
                         </Button>
                         <Button
@@ -199,6 +199,7 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = _.map(this.props.headers, header => (
                 <ListingItem
+                    updateState={this.props.updateState}
                     showUK={this.props.showUK}
                     canRank={this.props.canRank}
                     api={this.props.api}
@@ -235,6 +236,9 @@ class ListingItem extends React.Component {
                 {showUK && header.ukMultiplier ? Math.floor(value * header.ukMultiplier) : value}
                 </a>
     }
+    formatter_new_36(value, listing, keys, header, apikey, showUK) {
+        return value == "" ? null : <i className={"fa fa-" + value}></i>
+    }
     formatter_address(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
                     + "?q=" + listing[keys.latitude] + "," + listing[keys.longitude]
@@ -246,19 +250,29 @@ class ListingItem extends React.Component {
                 || this["formatter_" + (typeof value)]
                 || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
+    toggleIcon(event) {
+        var h = this.props.header,
+            l = this.props.listing,
+            value = l[h._id],
+            icons = h.toggleIcons.split(","),
+            next = value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length;
+
+        this.props.updateState(s => _.find(s.listings, listing => listing[0] = l[0])[h._id] = icons[next])
+    }
     render() {
         if (!this.props) return false
         var p = this.props,
             h = p.header,
             value = p.listing[h._id],
             style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
+            toggle = !h.toggleIcons ? null : {onClick: _.bind(this.toggleIcon, this), className: "toggleicons"},
             bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize]
                 if (bucket) _.extend(style, {backgroundColor: bucket[1]})
             }
         return (
-            <Col md={1} style={style}>
+            <Col md={1} style={style} {...toggle}>
                 {this.formatter(value, p.listing, p.keys, p.header, p.showUK)}
             </Col>
         )
@@ -290,11 +304,11 @@ class App extends React.Component {
                             () => this.saveHeaderValue(null, redfin, id, value)))
         _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
     }
-    toggleRank(force) {
+    toggleRank(force) { // 1st param may be (ignored) mouse event or boolean
         var state = _.clone(this.state),
-            canRank = !state.canRank
-        state.canRank = canRank
-        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, canRank))
+            shouldRank = typeof force == "boolean" && force ? true : state.canRank = !state.canRank;
+
+        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, shouldRank))
         this.setState(state)
     }
     toggleUK() {
@@ -334,8 +348,9 @@ class App extends React.Component {
             if (!opts.map.length) return
         }
 
-        var [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
-        if (!index) return
+        if (!opts.map.length) return
+        var index, listing_id, lat, long, id, distanceTo, headerName
+        [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
 
         var request = _.clone(opts.base);
         _.extend(request, {origin: lat + "," + long, destination: distanceTo})
@@ -344,7 +359,7 @@ class App extends React.Component {
             try {
                 duration = parseInt(response.routes[0].legs[0].duration.text) // distance.text, duration.text
            } catch (e) {
-                console.log("error getting directions for", listing, e)
+                console.log("error getting directions for", request, e)
                 duration=0
             }
             var state = _.clone(this.state)
@@ -460,22 +475,24 @@ class App extends React.Component {
             }.bind(this))
     }
     addNewField() {
-        var len = this.state.headers.length,
+        var maxShownId = _.max(this.state.headers, "_id"),
+            maxHiddenId = _.max(this.state.hidden, "_id"),
+            newId = 1 + (maxShownId._id > maxHiddenId._id ? maxShownId._id : maxHiddenId_.id),
             state = _.clone(this.state),
-            header =  _.extend(_.clone(state.fields[0]), {
-                _id: len,
-                redfin: "new_" + len,
-                sequence: len,
+            header =  _.extend(_.clone(state.headers[0]), {
+                _id: newId,
+                redfin: "new_" + newId,
+                sequence: newId,
                 show: true,
-                text: "new_" + len})
+                text: "new_" + newId})
 
         state.headers.push(header)
         _.each(state.listings, l => l.push(""))
-        this.setState(newState)
+        this.setState(state)
 
-        retryAjax(JSON.stringify(header), {api: "/savenewfield", type: "post"})
+        app.retryAjax(JSON.stringify(header), {api: "/savenewfield", type: "post"})
             .done(function(content){
-                console.log("worked!", arguments)
+                console.log("added new field!", arguments)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
@@ -484,6 +501,7 @@ class App extends React.Component {
     render() {
         var listings = _.map(this.state.listings, listing => (
                 <Listing
+                    updateState={_.bind(this.updateState, this)}
                     canRank={this.state.canRank}
                     showUK={this.state.showUK}
                     api={this.props.api}
@@ -510,6 +528,7 @@ class App extends React.Component {
                     toggleUK={_.bind(this.toggleUK, this)}
                     toggleMove={_.bind(this.toggleMove, this)}
                     toggleRank={_.bind(this.toggleRank, this)}
+                    addNewField={_.bind(this.addNewField, this)}
                     toggleCurrentActives={_.bind(this.toggleCurrentActives, this)}/>
                 <div style={{paddingTop: this.state.canMove * 20 + 68}}/>
                 {listings}
@@ -577,6 +596,7 @@ class FieldEditor extends React.Component {
                             updateBuckets={_.bind(this.updateBuckets, this)}/>
                         <Field title="&raquo; Math" name="math" {...props}/>
                         <Field title="&raquo; Distance To" name="distanceTo" {...props}/>
+                        <Field title="&raquo; Toggle icons" name="toggleIcons" {...props} text="FA icons, without 'fa-'"/>
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
