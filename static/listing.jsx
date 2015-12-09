@@ -57,7 +57,6 @@ class ListingApp {
         }())
         return def.promise()
     } // function retryAjax
-
 }
 
 var app = new ListingApp()
@@ -155,7 +154,14 @@ class Control extends React.Component {
             });
         return (
             <Row className="control" style={{top: this.props.canMove * 20 + 34}}>
-                <Col md={12}>
+                <Col md={1}>
+                    <Button
+                        bsStyle="info"
+                        onClick={this.props.addNewField}>
+                        New Field
+                    </Button>
+                </Col>
+                <Col md={11}>
                     <span className="pull-right">
                         <Button
                             bsStyle={ukStyle}
@@ -166,11 +172,6 @@ class Control extends React.Component {
                             bsStyle={rankStyle}
                             onClick={this.props.toggleRank}>
                             Rank
-                        </Button>
-                        <Button
-                            bsStyle="info"
-                            onClick={this.props.addNewField}>
-                            New Field
                         </Button>
                         <Button
                             bsStyle={curStyle}
@@ -199,6 +200,7 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = _.map(this.props.headers, header => (
                 <ListingItem
+                    toggleIcon={this.props.toggleIcon}
                     updateState={this.props.updateState}
                     showUK={this.props.showUK}
                     canRank={this.props.canRank}
@@ -237,7 +239,7 @@ class ListingItem extends React.Component {
                 </a>
     }
     formatter_new_36(value, listing, keys, header, apikey, showUK) {
-        return value == "" ? null : <i className={"fa fa-" + value}></i>
+        return <i className={"fa fa-" + (value == "" ? "dot-circle-o no-selection" : value)}></i>
     }
     formatter_address(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
@@ -250,22 +252,15 @@ class ListingItem extends React.Component {
                 || this["formatter_" + (typeof value)]
                 || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
-    toggleIcon(event) {
-        var h = this.props.header,
-            l = this.props.listing,
-            value = l[h._id],
-            icons = h.toggleIcons.split(","),
-            next = value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length;
-
-        this.props.updateState(s => _.find(s.listings, listing => listing[0] = l[0])[h._id] = icons[next])
-    }
     render() {
         if (!this.props) return false
         var p = this.props,
             h = p.header,
             value = p.listing[h._id],
             style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
-            toggle = !h.toggleIcons ? null : {onClick: _.bind(this.toggleIcon, this), className: "toggleicons"},
+            toggle = !h.toggleIcons ? null : {
+                        onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
+                        className: "toggleicons"},
             bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize]
@@ -327,7 +322,6 @@ class App extends React.Component {
                 .reduce((ranking, h) => ranking - (parseInt(h.buckets[Math.floor(listing[h._id] / h.bucketSize)
                                             * h.bucketSize] || 0) * parseInt(h.bucketMultiplier || 1)), 0)
                 .value()
-        console.log("rank", res);
         return res
     }
     updateDistances(opts) {
@@ -374,7 +368,7 @@ class App extends React.Component {
         var data = {id: id, headername: headerName, value: value}
         app.retryAjax(JSON.stringify(data), {api: "savelistingdata", type: "post"})
             .done(function(content) {
-                console.log("worked!", content)
+                console.log("saving listing value worked!", content)
             }.bind(this))
             .fail(function() {
                 console.log("failed", arguments)
@@ -423,10 +417,10 @@ class App extends React.Component {
         this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, true),
                         () => this.saveHeaderValue(null, "show", id, false))
     }
-    saveHeader(header) {
-        this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
-                        () => this.saveHeader(header))
-    }
+    // saveHeader(header) {
+    //     this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
+    //                     () => this.saveHeader(header))
+    // }
     updateState(updater, save) {
         var state = _.clone(this.state);
         updater(state)
@@ -468,7 +462,7 @@ class App extends React.Component {
                             : [[id, value]]}
         app.retryAjax(JSON.stringify(data), {api: "/saveheadervalue", type: "post"})
             .done(function(content){
-                console.log("saving worked!", data, arguments)
+                console.log("saving header value worked!", data, arguments)
             }.bind(this))
             .fail(function() {
                 console.log(arguments)
@@ -498,9 +492,18 @@ class App extends React.Component {
                 console.log(arguments)
             }.bind(this))
     }
+    toggleIcon(listing, hId, event) {
+        var value = listing[hId],
+            header = _.find(this.state.headers, h => h._id == hId),
+            icons = header.toggleIcons.split(","),
+            icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length];
+        this.updateState(s => _.find(s.listings, l => l[0] == listing[0])[hId] = icon,
+                        s => this.updateListingDB(listing[0], header.redfin, icon))
+    }
     render() {
         var listings = _.map(this.state.listings, listing => (
                 <Listing
+                    toggleIcon={_.bind(this.toggleIcon, this)}
                     updateState={_.bind(this.updateState, this)}
                     canRank={this.state.canRank}
                     showUK={this.state.showUK}

@@ -34,12 +34,30 @@
 
 .toggleicons {
   text-align: center;
-  margin-top: 2px;
+  padding-top: 2px;
 }
 
 .toggleicons:hover {
   cursor: pointer
 }
+
+.toggleicons .no-selection {
+  color: #eee
+}
+
+.toggleicons .fa-ban {
+  color: red
+}
+
+.toggleicons .fa-smile-o {
+  color: green;
+  background-color: yellow;
+}
+
+.toggleicons .fa-eye {
+  color: blue;
+}
+
 
 .control {
   background-color: #eef;

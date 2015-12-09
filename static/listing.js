@@ -249,7 +249,18 @@ var Control = (function (_React$Component3) {
                 { className: "control", style: { top: this.props.canMove * 20 + 34 } },
                 React.createElement(
                     Col,
-                    { md: 12 },
+                    { md: 1 },
+                    React.createElement(
+                        Button,
+                        {
+                            bsStyle: "info",
+                            onClick: this.props.addNewField },
+                        "New Field"
+                    )
+                ),
+                React.createElement(
+                    Col,
+                    { md: 11 },
                     React.createElement(
                         "span",
                         { className: "pull-right" },
@@ -266,13 +277,6 @@ var Control = (function (_React$Component3) {
                                 bsStyle: rankStyle,
                                 onClick: this.props.toggleRank },
                             "Rank"
-                        ),
-                        React.createElement(
-                            Button,
-                            {
-                                bsStyle: "info",
-                                onClick: this.props.addNewField },
-                            "New Field"
                         ),
                         React.createElement(
                             Button,
@@ -322,6 +326,7 @@ var Listing = (function (_React$Component4) {
             if (!this.props) return false;
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(ListingItem, {
+                    toggleIcon: _this7.props.toggleIcon,
                     updateState: _this7.props.updateState,
                     showUK: _this7.props.showUK,
                     canRank: _this7.props.canRank,
@@ -402,7 +407,7 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "formatter_new_36",
         value: function formatter_new_36(value, listing, keys, header, apikey, showUK) {
-            return value == "" ? null : React.createElement("i", { className: "fa fa-" + value });
+            return React.createElement("i", { className: "fa fa-" + (value == "" ? "dot-circle-o no-selection" : value) });
         }
     }, {
         key: "formatter_address",
@@ -420,21 +425,6 @@ var ListingItem = (function (_React$Component5) {
             return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK);
         }
     }, {
-        key: "toggleIcon",
-        value: function toggleIcon(event) {
-            var h = this.props.header,
-                l = this.props.listing,
-                value = l[h._id],
-                icons = h.toggleIcons.split(","),
-                next = value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length;
-
-            this.props.updateState(function (s) {
-                return _.find(s.listings, function (listing) {
-                    return listing[0] = l[0];
-                })[h._id] = icons[next];
-            });
-        }
-    }, {
         key: "render",
         value: function render() {
             if (!this.props) return false;
@@ -442,7 +432,9 @@ var ListingItem = (function (_React$Component5) {
                 h = p.header,
                 value = p.listing[h._id],
                 style = { overflow: "hidden", height: 20, whiteSpace: "nowrap" },
-                toggle = !h.toggleIcons ? null : { onClick: _.bind(this.toggleIcon, this), className: "toggleicons" },
+                toggle = !h.toggleIcons ? null : {
+                onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
+                className: "toggleicons" },
                 bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize];
@@ -541,7 +533,6 @@ var App = (function (_React$Component6) {
             }).reduce(function (ranking, h) {
                 return ranking - parseInt(h.buckets[Math.floor(listing[h._id] / h.bucketSize) * h.bucketSize] || 0) * parseInt(h.bucketMultiplier || 1);
             }, 0).value();
-            console.log("rank", res);
             return res;
         }
     }, {
@@ -605,7 +596,7 @@ var App = (function (_React$Component6) {
         value: function updateListingDB(id, headerName, value) {
             var data = { id: id, headername: headerName, value: value };
             app.retryAjax(JSON.stringify(data), { api: "savelistingdata", type: "post" }).done((function (content) {
-                console.log("worked!", content);
+                console.log("saving listing value worked!", content);
             }).bind(this)).fail((function () {
                 console.log("failed", arguments);
             }).bind(this));
@@ -678,19 +669,11 @@ var App = (function (_React$Component6) {
                 return _this14.saveHeaderValue(null, "show", id, false);
             });
         }
-    }, {
-        key: "saveHeader",
-        value: function saveHeader(header) {
-            var _this15 = this;
+        // saveHeader(header) {
+        //     this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
+        //                     () => this.saveHeader(header))
+        // }
 
-            this.updateState(function (s) {
-                return s.headers[_.findIndex(s.headers, function (h) {
-                    return h._id == header._id;
-                })] = header;
-            }, function () {
-                return _this15.saveHeader(header);
-            });
-        }
     }, {
         key: "updateState",
         value: function updateState(updater, save) {
@@ -710,7 +693,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "reorderHeaders",
         value: function reorderHeaders(sortNode) {
-            var _this16 = this;
+            var _this15 = this;
 
             var ids = sortNode.sortable("toArray", { attribute: "data-id" }),
                 state = _.clone(this.state);
@@ -723,7 +706,7 @@ var App = (function (_React$Component6) {
             state.headers = _.sortBy(state.headers, "sequence");
             sortNode.sortable("cancel");
             state.listings = _.sortBy(state.listings, function (l) {
-                return _this16.getListingSortValue(l, state.headers, state.canRank);
+                return _this15.getListingSortValue(l, state.headers, state.canRank);
             });
             this.setState(state);
             this.saveHeaderValue(state.headers, "sequence");
@@ -746,7 +729,7 @@ var App = (function (_React$Component6) {
                     return [header._id, header[redfin]];
                 }) : [[id, value]] };
             app.retryAjax(JSON.stringify(data), { api: "/saveheadervalue", type: "post" }).done((function (content) {
-                console.log("saving worked!", data, arguments);
+                console.log("saving header value worked!", data, arguments);
             }).bind(this)).fail((function () {
                 console.log(arguments);
             }).bind(this));
@@ -778,12 +761,32 @@ var App = (function (_React$Component6) {
             }).bind(this));
         }
     }, {
+        key: "toggleIcon",
+        value: function toggleIcon(listing, hId, event) {
+            var _this16 = this;
+
+            var value = listing[hId],
+                header = _.find(this.state.headers, function (h) {
+                return h._id == hId;
+            }),
+                icons = header.toggleIcons.split(","),
+                icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length];
+            this.updateState(function (s) {
+                return _.find(s.listings, function (l) {
+                    return l[0] == listing[0];
+                })[hId] = icon;
+            }, function (s) {
+                return _this16.updateListingDB(listing[0], header.redfin, icon);
+            });
+        }
+    }, {
         key: "render",
         value: function render() {
             var _this17 = this;
 
             var listings = _.map(this.state.listings, function (listing) {
                 return React.createElement(Listing, {
+                    toggleIcon: _.bind(_this17.toggleIcon, _this17),
                     updateState: _.bind(_this17.updateState, _this17),
                     canRank: _this17.state.canRank,
                     showUK: _this17.state.showUK,
