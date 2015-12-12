@@ -57,13 +57,15 @@ def get_data():
     " retrieve all listings, return header info + data"
 
     raw_listings = list(mongo.db.listings.find())
+    notes = mongo.db.notes.find()
     headers = update_and_retrieve_headers(raw_listings)
     listings = condense_listings(raw_listings, headers)
 
     return json.dumps({"api": list(mongo.db.api.find())[0]["api"],
                        "headers": headers,
                        "keys": {h["redfin"]: h["_id"] for h in headers},
-                       "listings": list(listings)},
+                       "listings": list(listings),
+                       "notes": list(notes)},
                       default=json_util.default)
 
 
@@ -138,6 +140,16 @@ def save_header():
     field = {"_id": data.pop("_id"), "redfin": data.pop("redfin"), "_default": data}
 
     res = mongo.db.headers.update({"_id": field["_id"]}, {"$set": field})
+
+    return json.dumps(list(res))
+
+
+@app.route('/savenotes', methods=["PUT", "POST"])
+def save_notes():
+    data = request.get_json(force=True)  # date, listing_id, field_id, text
+    # notes[listing_id][redfin] = [ {date: xx, text: yy, ...}, ...]
+    res = mongo.db.notes.update({"_id": data.id},
+                                {"$push": {data.redfin: data.content}})
 
     return json.dumps(list(res))
 

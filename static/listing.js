@@ -165,12 +165,13 @@ var HeaderItem = (function (_React$Component2) {
         }
     }, {
         key: "closeFieldEditor",
-        value: function closeFieldEditor(header) {
+        value: function closeFieldEditor(header, isNewNotes) {
             this.updateState(function (s) {
-                return _.extend(s, header || {}, { showModal: false });
+                return _.extend(s, header || {}, { showModal: false, showType: isNewNotes ? "notes" : null });
             });
             if (header) {
-                this.props.save(_.omit(this.state.header, "showModal", "updateRanking"), this.state.updateRanking);
+                if (isNewNotes) header.notes = true;
+                this.props.save(_.omit(header, "showModal", "updateRanking", "showType"), this.state.updateRanking);
             }
         }
     }, {
@@ -330,6 +331,7 @@ var Listing = (function (_React$Component4) {
             var items = _.map(this.props.headers, function (header) {
                 return React.createElement(ListingItem, {
                     toggleIcon: _this7.props.toggleIcon,
+                    notes: _this7.props.notes,
                     updateState: _this7.props.updateState,
                     showUK: _this7.props.showUK,
                     canRank: _this7.props.canRank,
@@ -430,14 +432,17 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "render",
         value: function render() {
+            // notes = [date, redfin_field, content]
             if (!this.props) return false;
             var p = this.props,
                 h = p.header,
+                n = p.notes,
                 value = p.listing[h._id],
                 style = { overflow: "hidden", height: 20, whiteSpace: "nowrap" },
                 toggle = !h.toggleIcons ? null : {
                 onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
                 className: "toggleicons" },
+                noteIcon = !h.notes ? null : React.createElement("i", { className: "pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)] }),
                 bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize];
@@ -446,7 +451,8 @@ var ListingItem = (function (_React$Component5) {
             return React.createElement(
                 Col,
                 _extends({ md: 1, style: style }, toggle),
-                this.formatter(value, p.listing, p.keys, p.header, p.showUK)
+                this.formatter(value, p.listing, p.keys, p.header, p.showUK),
+                noteIcon
             );
         }
     }]);
@@ -480,6 +486,7 @@ var App = (function (_React$Component6) {
         var listings = _this9.updateMath(_.clone(props));
 
         _this9.state = { currentActivesOnly: true, canMove: false, canRank: false,
+            notes: _.clone(_this9.props.notes), // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
             headers: displayable, hidden: hidden,
             maxDate: maxDate, allListings: listings,
             apikey: props.api };
@@ -791,6 +798,7 @@ var App = (function (_React$Component6) {
                 return React.createElement(Listing, {
                     toggleIcon: _.bind(_this17.toggleIcon, _this17),
                     updateState: _.bind(_this17.updateState, _this17),
+                    notes: _this17.state.notes[listing[0]],
                     canRank: _this17.state.canRank,
                     showUK: _this17.state.showUK,
                     api: _this17.props.api,
@@ -893,11 +901,30 @@ var FieldEditor = (function (_React$Component7) {
             });
         }
     }, {
+        key: "showType",
+        value: function showType(type) {
+            this.setState({ showType: type });
+        }
+    }, {
         key: "render",
         value: function render() {
+            var _this19 = this;
+
             var header = this.state.header,
                 id = header._id,
-                props = { update: _.bind(this.updateFieldValue, this), header: header };
+                props = { update: _.bind(this.updateFieldValue, this), header: header },
+                text = "Math,Distance to,Toggle icons,Notes".split(","),
+                fields = _.map(text, function (t) {
+                return t.substr(0, 1).toLowerCase() + t.substr(1).replace(/ (.)/g, function ($0, $1) {
+                    return $1.toUpperCase();
+                });
+            }),
+                type = _.find(fields, function (n) {
+                return header[n];
+            }),
+                isType = function isType(t) {
+                return type == t || _this19.state.showType == t;
+            };
             return React.createElement(
                 Modal,
                 { show: this.state.showModal, onHide: _.bind(this.props.close, this, null) },
@@ -924,9 +951,15 @@ var FieldEditor = (function (_React$Component7) {
                         React.createElement(Buckets, {
                             buckets: this.state.header.buckets,
                             updateBuckets: _.bind(this.updateBuckets, this) }),
-                        React.createElement(Field, _extends({ title: "» Math", name: "math" }, props)),
-                        React.createElement(Field, _extends({ title: "» Distance To", name: "distanceTo" }, props)),
-                        React.createElement(Field, _extends({ title: "» Toggle icons", name: "toggleIcons" }, props, { text: "FA icons, without 'fa-'" }))
+                        React.createElement(FieldType, {
+                            showType: _.bind(this.showType, this),
+                            header: header,
+                            text: text,
+                            fields: fields,
+                            type: type }),
+                        !isType("math") ? "" : React.createElement(Field, _extends({ title: "» Math", name: "math" }, props)),
+                        !isType("distanceTo") ? "" : React.createElement(Field, _extends({ title: "» Distance To", name: "distanceTo" }, props)),
+                        !isType("toggleIcons") ? "" : React.createElement(Field, _extends({ title: "» Toggle icons", name: "toggleIcons" }, props, { text: "FA icons, without 'fa-'" }))
                     )
                 ),
                 React.createElement(
@@ -934,7 +967,7 @@ var FieldEditor = (function (_React$Component7) {
                     null,
                     React.createElement(
                         Button,
-                        { onClick: _.bind(this.props.close, this, this.state.header) },
+                        { onClick: _.bind(this.props.close, this, this.state.header, this.state.showType == "notes") },
                         "Save & Close"
                     ),
                     React.createElement(
@@ -962,7 +995,7 @@ var Buckets = (function (_React$Component8) {
     _createClass(Buckets, [{
         key: "render",
         value: function render() {
-            var _this20 = this;
+            var _this21 = this;
 
             if (!this.props.buckets) return false;
             var buckets = [];
@@ -984,7 +1017,7 @@ var Buckets = (function (_React$Component8) {
                     React.createElement("input", {
                         type: "text",
                         defaultValue: wc[0],
-                        onChange: _.bind(_this20.props.updateBuckets, null, bucket) })
+                        onChange: _.bind(_this21.props.updateBuckets, null, bucket) })
                 ));
             });
             return React.createElement(
@@ -1011,8 +1044,61 @@ var Buckets = (function (_React$Component8) {
     return Buckets;
 })(React.Component);
 
-var Field = (function (_React$Component9) {
-    _inherits(Field, _React$Component9);
+var FieldType = (function (_React$Component9) {
+    _inherits(FieldType, _React$Component9);
+
+    function FieldType() {
+        _classCallCheck(this, FieldType);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(FieldType).apply(this, arguments));
+    }
+
+    _createClass(FieldType, [{
+        key: "render",
+        //check, fa-circle-o
+        value: function render() {
+            var _this23 = this;
+
+            var h = this.props.header,
+                type = this.props.type,
+                text = this.props.text,
+                fields = this.props.fields,
+                offOn = ["fa fa-circle-o", "fa fa-check"],
+                btns = _.map(text, function (t, i) {
+                return React.createElement(
+                    Button,
+                    {
+                        key: i,
+                        bsSize: "xsmall",
+                        style: { marginRight: 5 },
+                        onClick: _.bind(_this23.props.showType, null, fields[i]) },
+                    t
+                );
+            });
+            return React.createElement(
+                Row,
+                null,
+                React.createElement(
+                    Col,
+                    { md: 3, className: "title" },
+                    "Type"
+                ),
+                React.createElement(
+                    Col,
+                    { md: 9, className: "values", style: { marginTop: 5 } },
+                    type ? text[_.findIndex(fields, function (f) {
+                        return f == type;
+                    })] : btns
+                )
+            );
+        }
+    }]);
+
+    return FieldType;
+})(React.Component);
+
+var Field = (function (_React$Component10) {
+    _inherits(Field, _React$Component10);
 
     function Field() {
         _classCallCheck(this, Field);

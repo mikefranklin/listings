@@ -104,10 +104,12 @@ class HeaderItem extends React.Component {
     openFieldEditor() {
         this.updateState(s => s.showModal = true)
     }
-    closeFieldEditor(header) {
-        this.updateState(s => _.extend(s, header || {}, {showModal: false}))
+    closeFieldEditor(header, isNewNotes) {
+        this.updateState(s => _.extend(s, header || {},
+                                {showModal: false, showType: isNewNotes ? "notes" : null}))
         if (header) {
-            this.props.save(_.omit(this.state.header, "showModal", "updateRanking"), this.state.updateRanking)
+            if (isNewNotes) header.notes = true;
+            this.props.save(_.omit(header, "showModal", "updateRanking", "showType"), this.state.updateRanking)
         }
     }
     render() {
@@ -197,6 +199,7 @@ class Listing extends React.Component {
         var items = _.map(this.props.headers, header => (
                 <ListingItem
                     toggleIcon={this.props.toggleIcon}
+                    notes={this.props.notes}
                     updateState={this.props.updateState}
                     showUK={this.props.showUK}
                     canRank={this.props.canRank}
@@ -248,15 +251,18 @@ class ListingItem extends React.Component {
                 || this["formatter_" + (typeof value)]
                 || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
-    render() {
+    render() { // notes = [date, redfin_field, content]
         if (!this.props) return false
         var p = this.props,
             h = p.header,
+            n = p.notes,
             value = p.listing[h._id],
             style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
             toggle = !h.toggleIcons ? null : {
                         onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
                         className: "toggleicons"},
+            noteIcon = !h.notes ? null
+                : <i className={"pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)]}></i>,
             bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize]
@@ -265,6 +271,7 @@ class ListingItem extends React.Component {
         return (
             <Col md={1} style={style} {...toggle}>
                 {this.formatter(value, p.listing, p.keys, p.header, p.showUK)}
+                {noteIcon}
             </Col>
         )
     }
@@ -281,6 +288,7 @@ class App extends React.Component {
             listings = this.updateMath(_.clone(props))
 
         this.state = {currentActivesOnly: true, canMove: false, canRank: false,
+                        notes: _.clone(this.props.notes), // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
                         headers: displayable, hidden: hidden,
                         maxDate: maxDate, allListings: listings,
                         apikey: props.api}
@@ -501,6 +509,7 @@ class App extends React.Component {
                 <Listing
                     toggleIcon={_.bind(this.toggleIcon, this)}
                     updateState={_.bind(this.updateState, this)}
+                    notes={this.state.notes[listing[0]]}
                     canRank={this.state.canRank}
                     showUK={this.state.showUK}
                     api={this.props.api}
@@ -574,10 +583,18 @@ class FieldEditor extends React.Component {
             })
         })
     }
+    showType(type) {
+        this.setState({showType: type})
+    }
     render() {
         var header = this.state.header,
             id = header._id,
-            props = {update: _.bind(this.updateFieldValue, this), header: header};
+            props = {update: _.bind(this.updateFieldValue, this), header: header},
+            text = "Math,Distance to,Toggle icons,Notes".split(","),
+            fields= _.map(text, t => t.substr(0,1).toLowerCase()
+                                    + t.substr(1).replace(/ (.)/g, ($0, $1) => $1.toUpperCase())),
+            type = _.find(fields, n => header[n]),
+            isType = t => type == t || this.state.showType == t;
         return (
             <Modal show={this.state.showModal} onHide={_.bind(this.props.close, this, null)}>
                 <Modal.Header closeButton>
@@ -593,13 +610,22 @@ class FieldEditor extends React.Component {
                         <Buckets
                             buckets={this.state.header.buckets}
                             updateBuckets={_.bind(this.updateBuckets, this)}/>
-                        <Field title="&raquo; Math" name="math" {...props}/>
-                        <Field title="&raquo; Distance To" name="distanceTo" {...props}/>
-                        <Field title="&raquo; Toggle icons" name="toggleIcons" {...props} text="FA icons, without 'fa-'"/>
+                        <FieldType
+                            showType={_.bind(this.showType, this)}
+                            header={header}
+                            text={text}
+                            fields={fields}
+                            type={type}/>
+                        {!isType("math") ? ""
+                            : <Field title="&raquo; Math" name="math" {...props}/>}
+                        {!isType("distanceTo") ? ""
+                            : <Field title="&raquo; Distance To" name="distanceTo" {...props}/>}
+                        {!isType("toggleIcons") ? ""
+                            : <Field title="&raquo; Toggle icons" name="toggleIcons" {...props} text="FA icons, without 'fa-'"/>}
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button onClick={_.bind(this.props.close, this, this.state.header)}>
+                    <Button onClick={_.bind(this.props.close, this, this.state.header, this.state.showType=="notes")}>
                         Save & Close
                     </Button>
                     <Button onClick={_.bind(this.props.close, this, null)}>Close</Button>
@@ -635,6 +661,31 @@ class Buckets extends React.Component {
                     <Grid fluid={true}>
                         {buckets}
                     </Grid>
+                </Col>
+            </Row>
+        )
+    }
+}
+
+class FieldType extends React.Component { //check, fa-circle-o
+    render() {
+        var h = this.props.header,
+            type = this.props.type,
+            text = this.props.text,
+            fields = this.props.fields,
+            offOn = ["fa fa-circle-o", "fa fa-check"],
+            btns = _.map(text, (t, i) => (  <Button
+                                                key={i}
+                                                bsSize="xsmall"
+                                                style={{marginRight: 5}}
+                                                onClick={_.bind(this.props.showType, null, fields[i])}>
+                                                {t}
+                                            </Button>))
+        return (
+            <Row>
+                <Col md={3} className="title">Type</Col>
+                <Col md={9} className="values" style={{marginTop: 5}}>
+                    {type ? text[_.findIndex(fields, f => f == type)] : btns}
                 </Col>
             </Row>
         )

@@ -43,6 +43,18 @@ ul.nav .fa-circle-o {
   background-color: rgb(252, 255, 212)
 }
 
+.house .notes {
+  cursor: pointer;
+}
+
+.house .notes.off {
+  color: #ccc;
+}
+
+.house .notes.on {
+  color: rgb(58, 221, 84);
+}
+
 .header .edit {
   float:left;
   width: 80px;
