@@ -1,11 +1,26 @@
+BODY {
+  margin-top: 50px;
+}
+
+ul.nav li:hover {
+  text-decoration: underline;
+  color: blue
+}
+
+ul.nav .fa-check {
+  color: lightgreen;
+  width: 14px
+}
+
+ul.nav .fa-circle-o {
+  color: #ddd;
+  width: 14px
+}
 
 .header {
   border-bottom: solid blue 2px;
   margin-bottom: 3px;
-  position: fixed;
-  width: 100%;
   background-color: white;
-  z-index: 2;
 }
 
 .header .item {
@@ -13,15 +28,11 @@
   border: solid #eee 1px;
 }
 
-.header .move,
-.header .opts {
-  margin-right: 4px;
-  color: #ccc;
-}
-
 .header .move {
-  margin-top: 4px;
-  z-index: 3;
+  margin-right: 4px;
+  padding-top: 3px;
+  float: left;
+  color: #ccc;
 }
 
 .house {
@@ -30,6 +41,41 @@
 
 .house:hover {
   background-color: rgb(252, 255, 212)
+}
+
+.header .edit {
+  float:left;
+  width: 80px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.header .togglevis {
+  float: right;
+  display:none;
+  margin-top:2px;
+  cursor: pointer;
+}
+
+.header .item {
+  padding: 5px;
+}
+
+.header .item:hover .togglevis {
+  color: red;
+  display:inline;
+}
+
+.header .edit:hover {
+  color: darkgreen;
+  cursor: pointer;
+  text-decoration: underline;
+
+}
+
+.header div:hover .move {
+  color: darkgreen;
+  cursor: pointer
 }
 
 .toggleicons {
@@ -56,47 +102,6 @@
 
 .toggleicons .fa-eye {
   color: blue;
-}
-
-
-.control {
-  background-color: #eef;
-  position: fixed;
-  width: 100%;
-  z-index: 2
-}
-
-.control span > button,
-.control span > div {
-   margin-left: 15px;
-}
-
-.header .edit {
-  float:left
-}
-
-.header .togglevis {
-  float: right;
-  display:none;
-  margin-top:2px;
-  cursor: pointer;
-}
-
-.header .item:hover .togglevis {
-  color: red;
-  display:inline;
-}
-
-.header .edit:hover {
-  color: darkgreen;
-  cursor: pointer;
-  text-decoration: underline;
-
-}
-
-.header div:hover .move {
-  color: darkgreen;
-  cursor: pointer
 }
 
 .title,

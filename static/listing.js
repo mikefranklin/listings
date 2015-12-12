@@ -28,7 +28,7 @@ var ListingApp = (function () {
     function ListingApp() {
         _classCallCheck(this, ListingApp);
 
-        _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","), function (m) {
+        _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem,Navbar,Nav,NavItem,NavDropdown".split(","), function (m) {
             window[m] = ReactBootstrap[m];
         }); // pollute global namespace for convenience
         this.loadAndRenderData();
@@ -37,6 +37,7 @@ var ListingApp = (function () {
             headerUpdated: new signals.Signal()
         };
         this.colors = ["#CBEAF6", "#B9E3F3", "#A8DCF0", "#96D5ED", "#87CEEB", "#73C7E7", "#62BFE4", "#51B8E1", "#3FB1DE", "#2EAADC"];
+        console.log(this.colors);
         return this;
     }
 
@@ -230,11 +231,7 @@ var Control = (function (_React$Component3) {
             var _this5 = this;
 
             if (!this.props) return false;
-            var opts = ["default", "success"],
-                moveStyle = opts[+!!this.props.canMove],
-                curStyle = opts[+!!this.props.currentActivesOnly],
-                rankStyle = opts[+!!this.props.canRank],
-                ukStyle = opts[+!!this.props.showUK],
+            var offOn = ["fa fa-circle-o", "fa fa-check"],
                 hidden = _.map(this.props.hidden, function (header) {
                 return React.createElement(
                     MenuItem,
@@ -245,61 +242,67 @@ var Control = (function (_React$Component3) {
                 );
             });
             return React.createElement(
-                Row,
-                { className: "control", style: { top: this.props.canMove * 20 + 34 } },
+                Navbar,
+                { fixedTop: true },
                 React.createElement(
-                    Col,
-                    { md: 1 },
+                    Navbar.Header,
+                    null,
                     React.createElement(
-                        Button,
-                        {
-                            bsStyle: "info",
-                            onClick: this.props.addNewField },
-                        "New Field"
+                        Navbar.Brand,
+                        null,
+                        "Listings"
                     )
                 ),
                 React.createElement(
-                    Col,
-                    { md: 11 },
+                    Nav,
+                    null,
                     React.createElement(
-                        "span",
-                        { className: "pull-right" },
-                        React.createElement(
-                            Button,
-                            {
-                                bsStyle: ukStyle,
-                                onClick: this.props.toggleUK },
-                            "UK"
-                        ),
-                        React.createElement(
-                            Button,
-                            {
-                                bsStyle: rankStyle,
-                                onClick: this.props.toggleRank },
-                            "Rank"
-                        ),
-                        React.createElement(
-                            Button,
-                            {
-                                bsStyle: curStyle,
-                                onClick: this.props.toggleCurrentActives },
-                            "Current Actives"
-                        ),
-                        React.createElement(
-                            Button,
-                            {
-                                bsStyle: moveStyle,
-                                onClick: this.props.toggleMove },
-                            "Toggle move"
-                        ),
-                        React.createElement(
-                            DropdownButton,
-                            {
-                                pullRight: true,
-                                title: "Unhide",
-                                id: "unhide" },
-                            hidden
-                        )
+                        NavItem,
+                        {
+                            eventKey: 1,
+                            onClick: this.props.toggleRank },
+                        React.createElement("i", { className: offOn[+!!this.props.canRank] }),
+                        " Rank"
+                    ),
+                    React.createElement(
+                        NavItem,
+                        {
+                            eventKey: 2,
+                            onClick: this.props.toggleUK },
+                        React.createElement("i", { className: offOn[+!!this.props.showUK] }),
+                        " UK units"
+                    ),
+                    React.createElement(
+                        NavItem,
+                        {
+                            eventKey: 3,
+                            onClick: this.props.toggleMove },
+                        React.createElement("i", { className: offOn[+!!this.props.canMove] }),
+                        " Resequence"
+                    ),
+                    React.createElement(
+                        NavItem,
+                        {
+                            eventKey: 4,
+                            onClick: this.props.toggleCurrentActives },
+                        React.createElement("i", { className: offOn[+!!this.props.currentActivesOnly] }),
+                        "Actives only"
+                    ),
+                    React.createElement(
+                        NavDropdown,
+                        { eventKey: 5, title: "Unhide", id: "basic-nav-dropdown" },
+                        hidden
+                    )
+                ),
+                React.createElement(
+                    Nav,
+                    { pullRight: true },
+                    React.createElement(
+                        NavItem,
+                        {
+                            eventKey: 5,
+                            onClick: this.props.addNewField },
+                        "Add new field"
                     )
                 )
             );
@@ -799,13 +802,6 @@ var App = (function (_React$Component6) {
             return React.createElement(
                 Grid,
                 { fluid: true },
-                React.createElement(Header, {
-                    headers: this.state.headers,
-                    canMove: this.state.canMove,
-                    listings: this.state.listings,
-                    showUK: this.state.showUK,
-                    save: _.bind(this.saveHeader, this),
-                    hide: _.bind(this.hideHeader, this) }),
                 React.createElement(Control, {
                     hidden: this.state.hidden,
                     canRank: this.state.canRank,
@@ -818,7 +814,13 @@ var App = (function (_React$Component6) {
                     toggleRank: _.bind(this.toggleRank, this),
                     addNewField: _.bind(this.addNewField, this),
                     toggleCurrentActives: _.bind(this.toggleCurrentActives, this) }),
-                React.createElement("div", { style: { paddingTop: this.state.canMove * 20 + 68 } }),
+                React.createElement(Header, {
+                    headers: this.state.headers,
+                    canMove: this.state.canMove,
+                    listings: this.state.listings,
+                    showUK: this.state.showUK,
+                    save: _.bind(this.saveHeader, this),
+                    hide: _.bind(this.hideHeader, this) }),
                 listings
             );
         }
@@ -874,6 +876,7 @@ var FieldEditor = (function (_React$Component7) {
         value: function updateBuckets(bucket, event) {
             this.props.update(function (s) {
                 s.header["buckets"][bucket] = [event.target.value, ""];
+                console.log(app.colors);
                 var buckets = s.header.buckets,
                     min = !buckets ? 0 : _.min(buckets, function (wc) {
                     return +wc[0];

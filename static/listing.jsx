@@ -7,7 +7,7 @@ https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
 
 class ListingApp {
     constructor() {
-        _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem".split(","),
+        _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem,Navbar,Nav,NavItem,NavDropdown".split(","),
             function(m) {window[m] = ReactBootstrap[m]}) // pollute global namespace for convenience
         this.loadAndRenderData()
         this.signaller = {
@@ -15,6 +15,7 @@ class ListingApp {
             headerUpdated: new signals.Signal()
         }
         this.colors = ["#CBEAF6","#B9E3F3","#A8DCF0","#96D5ED","#87CEEB","#73C7E7","#62BFE4","#51B8E1","#3FB1DE","#2EAADC"]
+        console.log(this.colors)
         return this
     }
     loadAndRenderData() {
@@ -140,11 +141,7 @@ class Control extends React.Component {
     }
     render() {
         if (!this.props) return false
-        var opts = ["default", "success"],
-            moveStyle = opts[+!!this.props.canMove],
-            curStyle = opts[+!!this.props.currentActivesOnly],
-            rankStyle = opts[+!!this.props.canRank],
-            ukStyle = opts[+!!this.props.showUK],
+        var offOn = ["fa fa-circle-o", "fa fa-check"],
             hidden = _.map(this.props.hidden, (header) => {
                 return (<MenuItem
                             key={header._id}
@@ -152,46 +149,45 @@ class Control extends React.Component {
                             {header.text}
                         </MenuItem>)
             });
-        return (
-            <Row className="control" style={{top: this.props.canMove * 20 + 34}}>
-                <Col md={1}>
-                    <Button
-                        bsStyle="info"
-                        onClick={this.props.addNewField}>
-                        New Field
-                    </Button>
-                </Col>
-                <Col md={11}>
-                    <span className="pull-right">
-                        <Button
-                            bsStyle={ukStyle}
-                            onClick={this.props.toggleUK}>
-                            UK
-                        </Button>
-                        <Button
-                            bsStyle={rankStyle}
+            return (
+                <Navbar fixedTop>
+                    <Navbar.Header>
+                        <Navbar.Brand>Listings</Navbar.Brand>
+                    </Navbar.Header>
+                    <Nav>
+                        <NavItem
+                            eventKey={1}
                             onClick={this.props.toggleRank}>
-                            Rank
-                        </Button>
-                        <Button
-                            bsStyle={curStyle}
-                            onClick={this.props.toggleCurrentActives}>
-                            Current Actives
-                        </Button>
-                        <Button
-                            bsStyle={moveStyle}
+                            <i className={offOn[+!!this.props.canRank]}></i> Rank
+                        </NavItem>
+                        <NavItem
+                            eventKey={2}
+                            onClick={this.props.toggleUK}>
+                            <i className={offOn[+!!this.props.showUK]}></i> UK units
+                        </NavItem>
+                        <NavItem
+                            eventKey={3}
                             onClick={this.props.toggleMove}>
-                            Toggle move
-                        </Button>
-                        <DropdownButton
-                            pullRight
-                            title="Unhide"
-                            id="unhide">
-                        {hidden}
-                        </DropdownButton>
-                    </span>
-                </Col>
-            </Row>)
+                            <i className={offOn[+!!this.props.canMove]}></i> Resequence
+                        </NavItem>
+                        <NavItem
+                            eventKey={4}
+                            onClick={this.props.toggleCurrentActives}>
+                            <i className={offOn[+!!this.props.currentActivesOnly]}></i>Actives only
+                        </NavItem>
+                        <NavDropdown eventKey={5} title="Unhide" id="basic-nav-dropdown">
+                            {hidden}
+                        </NavDropdown>
+                    </Nav>
+                    <Nav pullRight>
+                        <NavItem
+                            eventKey={5}
+                            onClick={this.props.addNewField}>
+                            Add new field
+                        </NavItem>
+                    </Nav>
+                </Navbar>
+            )
     }
 }
 
@@ -514,13 +510,6 @@ class App extends React.Component {
                     headers={this.state.headers}/>))
         return (
             <Grid fluid={true}>
-                <Header
-                    headers={this.state.headers}
-                    canMove={this.state.canMove}
-                    listings={this.state.listings}
-                    showUK={this.state.showUK}
-                    save={_.bind(this.saveHeader, this)}
-                    hide={_.bind(this.hideHeader, this)}/>
                 <Control
                     hidden={this.state.hidden}
                     canRank={this.state.canRank}
@@ -533,7 +522,13 @@ class App extends React.Component {
                     toggleRank={_.bind(this.toggleRank, this)}
                     addNewField={_.bind(this.addNewField, this)}
                     toggleCurrentActives={_.bind(this.toggleCurrentActives, this)}/>
-                <div style={{paddingTop: this.state.canMove * 20 + 68}}/>
+                    <Header
+                        headers={this.state.headers}
+                        canMove={this.state.canMove}
+                        listings={this.state.listings}
+                        showUK={this.state.showUK}
+                        save={_.bind(this.saveHeader, this)}
+                        hide={_.bind(this.hideHeader, this)}/>
                 {listings}
             </Grid>
         )
@@ -565,6 +560,7 @@ class FieldEditor extends React.Component {
     updateBuckets(bucket, event) {
         this.props.update(s => {
             s.header["buckets"][bucket] = [event.target.value, ""]
+            console.log(app.colors)
             var buckets = s.header.buckets,
                 min = !buckets ? 0 : _.min(buckets, wc => +wc[0])[0],
                 max = !buckets ? 0 : _.max(buckets, wc => +wc[0])[0],
