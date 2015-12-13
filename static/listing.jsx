@@ -15,7 +15,6 @@ class ListingApp {
             headerUpdated: new signals.Signal()
         }
         this.colors = ["#CBEAF6","#B9E3F3","#A8DCF0","#96D5ED","#87CEEB","#73C7E7","#62BFE4","#51B8E1","#3FB1DE","#2EAADC"]
-        console.log(this.colors)
         return this
     }
     loadAndRenderData() {
@@ -214,6 +213,17 @@ class Listing extends React.Component {
 }
 
 class ListingItem extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = _.clone(props)
+    }
+    updateState(updater, save) {
+        var state = _.clone(this.state);
+        updater(state)
+        this.setState(state)
+        if (save) save()
+        return state
+    }
     formatter_undef() { return "~undefined~"}
     formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')}
     formatter_string(value, listing, keys, header, apikey, showUK) {
@@ -251,6 +261,13 @@ class ListingItem extends React.Component {
                 || this["formatter_" + (typeof value)]
                 || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
+    openNoteWriter() {
+        this.updateState(s => s.showModal = true)
+    }
+    closeNoteWriter(id, redfin, event) {
+        this.props.updateState(s => s.showModal = false)
+    }
+
     render() { // notes = [date, redfin_field, content]
         if (!this.props) return false
         var p = this.props,
@@ -262,7 +279,8 @@ class ListingItem extends React.Component {
                         onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
                         className: "toggleicons"},
             noteIcon = !h.notes ? null
-                : <i className={"pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)]}></i>,
+                : (<i   onClick={_.bind(this.openNoteWriter, this)}
+                        className={"pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)]}></i>),
             bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize]
@@ -272,8 +290,15 @@ class ListingItem extends React.Component {
             <Col md={1} style={style} {...toggle}>
                 {this.formatter(value, p.listing, p.keys, p.header, p.showUK)}
                 {noteIcon}
+                <NoteWriter
+                    close={_.bind(this.closeNoteWriter, this)}
+                    showModal={this.state.showModal}/>
             </Col>
         )
+        // header={this.state.header}
+        // update={_.bind(this.updateState, this)}
+        //
+
     }
 }
 
@@ -541,6 +566,55 @@ class App extends React.Component {
                 {listings}
             </Grid>
         )
+    }
+}
+
+class NoteWriter extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = _.clone(props)
+    }
+    componentWillReceiveProps(nextProps) {
+        this.setState(_.clone(nextProps))
+    }
+    updateFieldValue(name, event) {
+        var value = event.target.value;
+
+        //this.props.update(s => s.header[name] = value)
+    }
+    render() {
+        return (
+            <Modal show={this.state.showModal} onHide={_.bind(this.props.close, this, null)}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Notes for </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Grid fluid={true}>
+                        <Row>
+                            <Col md={3} className="title">today</Col>
+                            <Col md={9} className="values">
+                                <textarea style={{width: "100%"}} rows={5}></textarea>
+                            </Col>
+                        </Row>
+                        <Row>
+                            <Col md={3} className="title">date</Col>
+                            <Col md={9} className="values">
+                                old note content
+                            </Col>
+                        </Row>
+                    </Grid>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button >
+                        Save & Close
+                    </Button>
+                    <Button >Close</Button>
+                </Modal.Footer>
+            </Modal>
+        )
+
+        //onClick={_.bind(this.props.close, this, null)}
+        //onClick={_.bind(this.props.close, this, null)}
     }
 }
 

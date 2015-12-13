@@ -37,7 +37,6 @@ var ListingApp = (function () {
             headerUpdated: new signals.Signal()
         };
         this.colors = ["#CBEAF6", "#B9E3F3", "#A8DCF0", "#96D5ED", "#87CEEB", "#73C7E7", "#62BFE4", "#51B8E1", "#3FB1DE", "#2EAADC"];
-        console.log(this.colors);
         return this;
     }
 
@@ -356,13 +355,25 @@ var Listing = (function (_React$Component4) {
 var ListingItem = (function (_React$Component5) {
     _inherits(ListingItem, _React$Component5);
 
-    function ListingItem() {
+    function ListingItem(props) {
         _classCallCheck(this, ListingItem);
 
-        return _possibleConstructorReturn(this, Object.getPrototypeOf(ListingItem).apply(this, arguments));
+        var _this8 = _possibleConstructorReturn(this, Object.getPrototypeOf(ListingItem).call(this, props));
+
+        _this8.state = _.clone(props);
+        return _this8;
     }
 
     _createClass(ListingItem, [{
+        key: "updateState",
+        value: function updateState(updater, save) {
+            var state = _.clone(this.state);
+            updater(state);
+            this.setState(state);
+            if (save) save();
+            return state;
+        }
+    }, {
         key: "formatter_undef",
         value: function formatter_undef() {
             return "~undefined~";
@@ -430,6 +441,20 @@ var ListingItem = (function (_React$Component5) {
             return (this["formatter_" + header.redfin.replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK);
         }
     }, {
+        key: "openNoteWriter",
+        value: function openNoteWriter() {
+            this.updateState(function (s) {
+                return s.showModal = true;
+            });
+        }
+    }, {
+        key: "closeNoteWriter",
+        value: function closeNoteWriter(id, redfin, event) {
+            this.props.updateState(function (s) {
+                return s.showModal = false;
+            });
+        }
+    }, {
         key: "render",
         value: function render() {
             // notes = [date, redfin_field, content]
@@ -442,7 +467,8 @@ var ListingItem = (function (_React$Component5) {
                 toggle = !h.toggleIcons ? null : {
                 onClick: _.bind(this.props.toggleIcon, null, p.listing, h._id),
                 className: "toggleicons" },
-                noteIcon = !h.notes ? null : React.createElement("i", { className: "pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)] }),
+                noteIcon = !h.notes ? null : React.createElement("i", { onClick: _.bind(this.openNoteWriter, this),
+                className: "pull-right fa fa-pencil notes " + ["off", "on"][+!_.isEmpty(n)] }),
                 bucket;
             if (p.canRank && h.bucketSize && h.buckets) {
                 bucket = h.buckets[Math.floor(value / h.bucketSize) * h.bucketSize];
@@ -452,8 +478,14 @@ var ListingItem = (function (_React$Component5) {
                 Col,
                 _extends({ md: 1, style: style }, toggle),
                 this.formatter(value, p.listing, p.keys, p.header, p.showUK),
-                noteIcon
+                noteIcon,
+                React.createElement(NoteWriter, {
+                    close: _.bind(this.closeNoteWriter, this),
+                    showModal: this.state.showModal })
             );
+            // header={this.state.header}
+            // update={_.bind(this.updateState, this)}
+            //
         }
     }]);
 
@@ -837,16 +869,115 @@ var App = (function (_React$Component6) {
     return App;
 })(React.Component);
 
-var FieldEditor = (function (_React$Component7) {
-    _inherits(FieldEditor, _React$Component7);
+var NoteWriter = (function (_React$Component7) {
+    _inherits(NoteWriter, _React$Component7);
+
+    function NoteWriter(props) {
+        _classCallCheck(this, NoteWriter);
+
+        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(NoteWriter).call(this, props));
+
+        _this18.state = _.clone(props);
+        return _this18;
+    }
+
+    _createClass(NoteWriter, [{
+        key: "componentWillReceiveProps",
+        value: function componentWillReceiveProps(nextProps) {
+            this.setState(_.clone(nextProps));
+        }
+    }, {
+        key: "updateFieldValue",
+        value: function updateFieldValue(name, event) {
+            var value = event.target.value;
+
+            //this.props.update(s => s.header[name] = value)
+        }
+    }, {
+        key: "render",
+        value: function render() {
+            return React.createElement(
+                Modal,
+                { show: this.state.showModal, onHide: _.bind(this.props.close, this, null) },
+                React.createElement(
+                    Modal.Header,
+                    { closeButton: true },
+                    React.createElement(
+                        Modal.Title,
+                        null,
+                        "Notes for "
+                    )
+                ),
+                React.createElement(
+                    Modal.Body,
+                    null,
+                    React.createElement(
+                        Grid,
+                        { fluid: true },
+                        React.createElement(
+                            Row,
+                            null,
+                            React.createElement(
+                                Col,
+                                { md: 3, className: "title" },
+                                "today"
+                            ),
+                            React.createElement(
+                                Col,
+                                { md: 9, className: "values" },
+                                React.createElement("textarea", { style: { width: "100%" }, rows: 5 })
+                            )
+                        ),
+                        React.createElement(
+                            Row,
+                            null,
+                            React.createElement(
+                                Col,
+                                { md: 3, className: "title" },
+                                "date"
+                            ),
+                            React.createElement(
+                                Col,
+                                { md: 9, className: "values" },
+                                "old note content"
+                            )
+                        )
+                    )
+                ),
+                React.createElement(
+                    Modal.Footer,
+                    null,
+                    React.createElement(
+                        Button,
+                        null,
+                        "Save & Close"
+                    ),
+                    React.createElement(
+                        Button,
+                        null,
+                        "Close"
+                    )
+                )
+            );
+
+            //onClick={_.bind(this.props.close, this, null)}
+            //onClick={_.bind(this.props.close, this, null)}
+        }
+    }]);
+
+    return NoteWriter;
+})(React.Component);
+
+var FieldEditor = (function (_React$Component8) {
+    _inherits(FieldEditor, _React$Component8);
 
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this19 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this18.state = _.clone(props);
-        return _this18;
+        _this19.state = _.clone(props);
+        return _this19;
     }
 
     _createClass(FieldEditor, [{
@@ -908,7 +1039,7 @@ var FieldEditor = (function (_React$Component7) {
     }, {
         key: "render",
         value: function render() {
-            var _this19 = this;
+            var _this20 = this;
 
             var header = this.state.header,
                 id = header._id,
@@ -923,7 +1054,7 @@ var FieldEditor = (function (_React$Component7) {
                 return header[n];
             }),
                 isType = function isType(t) {
-                return type == t || _this19.state.showType == t;
+                return type == t || _this20.state.showType == t;
             };
             return React.createElement(
                 Modal,
@@ -983,8 +1114,8 @@ var FieldEditor = (function (_React$Component7) {
     return FieldEditor;
 })(React.Component);
 
-var Buckets = (function (_React$Component8) {
-    _inherits(Buckets, _React$Component8);
+var Buckets = (function (_React$Component9) {
+    _inherits(Buckets, _React$Component9);
 
     function Buckets() {
         _classCallCheck(this, Buckets);
@@ -995,7 +1126,7 @@ var Buckets = (function (_React$Component8) {
     _createClass(Buckets, [{
         key: "render",
         value: function render() {
-            var _this21 = this;
+            var _this22 = this;
 
             if (!this.props.buckets) return false;
             var buckets = [];
@@ -1017,7 +1148,7 @@ var Buckets = (function (_React$Component8) {
                     React.createElement("input", {
                         type: "text",
                         defaultValue: wc[0],
-                        onChange: _.bind(_this21.props.updateBuckets, null, bucket) })
+                        onChange: _.bind(_this22.props.updateBuckets, null, bucket) })
                 ));
             });
             return React.createElement(
@@ -1044,8 +1175,8 @@ var Buckets = (function (_React$Component8) {
     return Buckets;
 })(React.Component);
 
-var FieldType = (function (_React$Component9) {
-    _inherits(FieldType, _React$Component9);
+var FieldType = (function (_React$Component10) {
+    _inherits(FieldType, _React$Component10);
 
     function FieldType() {
         _classCallCheck(this, FieldType);
@@ -1057,7 +1188,7 @@ var FieldType = (function (_React$Component9) {
         key: "render",
         //check, fa-circle-o
         value: function render() {
-            var _this23 = this;
+            var _this24 = this;
 
             var h = this.props.header,
                 type = this.props.type,
@@ -1071,7 +1202,7 @@ var FieldType = (function (_React$Component9) {
                         key: i,
                         bsSize: "xsmall",
                         style: { marginRight: 5 },
-                        onClick: _.bind(_this23.props.showType, null, fields[i]) },
+                        onClick: _.bind(_this24.props.showType, null, fields[i]) },
                     t
                 );
             });
@@ -1097,8 +1228,8 @@ var FieldType = (function (_React$Component9) {
     return FieldType;
 })(React.Component);
 
-var Field = (function (_React$Component10) {
-    _inherits(Field, _React$Component10);
+var Field = (function (_React$Component11) {
+    _inherits(Field, _React$Component11);
 
     function Field() {
         _classCallCheck(this, Field);
