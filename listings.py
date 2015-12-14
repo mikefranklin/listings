@@ -99,7 +99,8 @@ def update_and_retrieve_headers(listings):
     for header in headers:
         header.update(header.pop("_default"))  # should merge with user data, if any
 
-    return sorted(headers, key=itemgetter("sequence"))
+    # sorted(headers, key=itemgetter("sequence"))
+    return sorted(headers, key=lambda h: str(h["sequence"]))
 
 
 # var data = {id: id, fieldname: fieldname, value: value}

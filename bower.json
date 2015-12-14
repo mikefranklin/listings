@@ -27,6 +27,7 @@
     "font-awesome": "~4.4.0",
     "react": "~0.14.2",
     "react-bootstrap": "~0.28.1",
-    "fancybox": "~2.1.5"
+    "fancybox": "~2.1.5",
+    "immutable": "~3.7.5"
   }
 }
