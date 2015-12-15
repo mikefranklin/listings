@@ -49,7 +49,6 @@ var ListingApp = (function () {
     _createClass(ListingApp, [{
         key: "loadAndRenderData",
         value: function loadAndRenderData() {
-            console.log(1);
             this.retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
                 // headers, listings, keys, api
                 console.log(content);
@@ -528,7 +527,7 @@ var App = (function (_React$Component6) {
             }, {});
         }).map(function (entry) {
             return Immutable.Map(entry).keySeq();
-        }); // because infinite loop?
+        }); // map rather than in reduce(), to avoid slowness/∞ loop
 
         _this9.state = { maxDate: listings.maxBy(function (l) {
                 return l.getIn(dtRef);
@@ -556,19 +555,19 @@ var App = (function (_React$Component6) {
 
     _createClass(App, [{
         key: "getSortedVisibleListings",
-        value: function getSortedVisibleListings(s) {
+        value: function getSortedVisibleListings(s, forceRank) {
             var _this10 = this;
 
             return s.allListings.filter(function (l) {
                 return !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate && l.get(s.keys.status).toLowerCase() == "active";
             }).sortBy(function (l) {
-                return _this10.getListingSortbyValue(l, s);
+                return _this10.getListingSortbyValue(l, s, forceRank);
             });
         }
     }, {
         key: "getListingSortbyValue",
-        value: function getListingSortbyValue(listing, state) {
-            return state.canRank ? this.getListingRankedValue(listing, state) : this.getListingSortValue(listing, state);
+        value: function getListingSortbyValue(listing, state, forceRank) {
+            return state.canRank || forceRank ? this.getListingRankedValue(listing, state) : this.getListingSortValue(listing, state);
         }
     }, {
         key: "getListingSortValue",
@@ -596,15 +595,10 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleRank",
         value: function toggleRank(force) {
-            var _this11 = this;
-
             // 1st param may be (ignored) mouse event or boolean
-            var state = _.clone(this.state),
-                shouldRank = typeof force == "boolean" && force ? true : state.canRank = !state.canRank;
-
-            state.listings = _.sortBy(state.listings, function (l) {
-                return _this11.getListingSortValue(l, state.headers, shouldRank);
-            });
+            var isForce = typeof force == "boolean" && force,
+                state = !isForce ? { canRank: !this.state.canRank } : {};
+            state.listings = this.getSortedVisibleListings(this.state, isForce || state.canRank);
             this.setState(state);
         }
     }, {
@@ -617,7 +611,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "updateDistances",
         value: function updateDistances(opts) {
-            var _this12 = this;
+            var _this11 = this;
 
             if (!opts) {
                 var lat = this.props.keys.latitude,
@@ -662,10 +656,10 @@ var App = (function (_React$Component6) {
                     console.log("error getting directions for", request, e);
                     duration = 0;
                 }
-                var state = _.clone(_this12.state);
+                var state = _.clone(_this11.state);
                 state.listings[index][id] = duration;
-                _this12.setState(state);
-                _this12.updateListingDB(listing_id, headerName, duration);
+                _this11.setState(state);
+                _this11.updateListingDB(listing_id, headerName, duration);
             });
 
             _.delay(_.bind(this.updateDistances, this), opts.wait, opts);
@@ -710,7 +704,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleCurrentActives",
         value: function toggleCurrentActives() {
-            var _this13 = this;
+            var _this12 = this;
 
             var state = _.clone(this.state),
                 keys = this.props.keys,
@@ -720,7 +714,7 @@ var App = (function (_React$Component6) {
             state.listings = _.chain(state.allListings).filter(function (l) {
                 return !state.currentActivesOnly || l[dt].$date == state.maxDate && l[keys.status].toLowerCase() == "active";
             }).sortBy(function (l) {
-                return _this13.getListingSortValue(l, state.headers, state.canRank);
+                return _this12.getListingSortValue(l, state.headers, state.canRank);
             }).value();
 
             this.setState(state);
@@ -733,23 +727,23 @@ var App = (function (_React$Component6) {
     }, {
         key: "showHeader",
         value: function showHeader(id) {
-            var _this14 = this;
+            var _this13 = this;
 
             this.updateState(function (s) {
-                return _this14.toggleHeaderVisibility(s.hidden, s.headers, id, true);
+                return _this13.toggleHeaderVisibility(s.hidden, s.headers, id, true);
             }, function () {
-                return _this14.saveHeaderValue(null, "show", id, true);
+                return _this13.saveHeaderValue(null, "show", id, true);
             });
         }
     }, {
         key: "hideHeader",
         value: function hideHeader(id) {
-            var _this15 = this;
+            var _this14 = this;
 
             this.updateState(function (s) {
-                return _this15.toggleHeaderVisibility(s.headers, s.hidden, id, true);
+                return _this14.toggleHeaderVisibility(s.headers, s.hidden, id, true);
             }, function () {
-                return _this15.saveHeaderValue(null, "show", id, false);
+                return _this14.saveHeaderValue(null, "show", id, false);
             });
         }
         // saveHeader(header) {
@@ -853,7 +847,7 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleIcon",
         value: function toggleIcon(listing, hId, event) {
-            var _this16 = this;
+            var _this15 = this;
 
             var value = listing[hId],
                 header = _.find(this.state.headers, function (h) {
@@ -866,26 +860,26 @@ var App = (function (_React$Component6) {
                     return l[0] == listing[0];
                 })[hId] = icon;
             }, function (s) {
-                return _this16.updateListingDB(listing[0], header.redfin, icon);
+                return _this15.updateListingDB(listing[0], header.redfin, icon);
             });
         }
     }, {
         key: "render",
         value: function render() {
-            var _this17 = this;
+            var _this16 = this;
 
             // in listing:                     notes={this.state.notes[listing[0]]}
             var listings = this.state.listings.map(function (listing) {
                 return React.createElement(Listing, {
-                    toggleIcon: _.bind(_this17.toggleIcon, _this17),
-                    updateState: _.bind(_this17.updateState, _this17),
-                    canRank: _this17.state.canRank,
-                    showUK: _this17.state.showUK,
-                    api: _this17.props.api,
+                    toggleIcon: _.bind(_this16.toggleIcon, _this16),
+                    updateState: _.bind(_this16.updateState, _this16),
+                    canRank: _this16.state.canRank,
+                    showUK: _this16.state.showUK,
+                    api: _this16.props.api,
                     key: listing.get(0),
-                    keys: _this17.props.keys,
+                    keys: _this16.props.keys,
                     listing: listing,
-                    headers: _this17.state.headers });
+                    headers: _this16.state.headers });
             });
             return React.createElement(
                 Grid,
@@ -924,10 +918,10 @@ var NoteWriter = (function (_React$Component7) {
     function NoteWriter(props) {
         _classCallCheck(this, NoteWriter);
 
-        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(NoteWriter).call(this, props));
+        var _this17 = _possibleConstructorReturn(this, Object.getPrototypeOf(NoteWriter).call(this, props));
 
-        _this18.state = _.clone(props);
-        return _this18;
+        _this17.state = _.clone(props);
+        return _this17;
     }
 
     _createClass(NoteWriter, [{
@@ -1023,10 +1017,10 @@ var FieldEditor = (function (_React$Component8) {
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this19 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this19.state = props;
-        return _this19;
+        _this18.state = props;
+        return _this18;
     }
 
     _createClass(FieldEditor, [{
@@ -1085,7 +1079,7 @@ var FieldEditor = (function (_React$Component8) {
     }, {
         key: "render",
         value: function render() {
-            var _this20 = this;
+            var _this19 = this;
 
             var header = this.state.header,
                 id = header.get("_id"),
@@ -1100,7 +1094,7 @@ var FieldEditor = (function (_React$Component8) {
                 return header.get(n);
             }),
                 isType = function isType(t) {
-                return type == t || _this20.state.showType == t;
+                return type == t || _this19.state.showType == t;
             };
             return React.createElement(
                 Modal,
@@ -1172,23 +1166,33 @@ var Buckets = (function (_React$Component9) {
     _createClass(Buckets, [{
         key: "shouldComponentUpdate",
         value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props.buckets != nextProps.buckets;
+            return this.props.buckets !== nextProps.buckets;
         }
     }, {
         key: "render",
         value: function render() {
-            var _this22 = this;
+            var _this21 = this;
 
             if (!this.props) return false;
             var buckets = [];
-            this.props.buckets.forEach(function (wc, bucket) {
-                // bucket = [weight, color]
+            Immutable.Map(this.props.buckets) // handles for undefined buckets
+            .map(function (wc, bucket) {
+                return [bucket, wc.get(0), wc.get(1)];
+            }).sortBy(function (e) {
+                return +e[0];
+            }).forEach(function (bwc) {
+                var _bwc = _slicedToArray(bwc, 3);
+
+                var bucket = _bwc[0];
+                var weight = _bwc[1];
+                var color = _bwc[2];
+
                 buckets.push(React.createElement(
                     Col,
                     {
                         key: "b" + bucket,
                         md: 2,
-                        style: { backgroundColor: wc.get(1), height: 26, paddingTop: 3 } },
+                        style: { backgroundColor: color, height: 26, paddingTop: 3 } },
                     bucket
                 ));
                 buckets.push(React.createElement(
@@ -1198,8 +1202,8 @@ var Buckets = (function (_React$Component9) {
                         md: 2 },
                     React.createElement("input", {
                         type: "text",
-                        defaultValue: wc.get(0),
-                        onChange: _.bind(_this22.props.updateBuckets, null, bucket) })
+                        defaultValue: weight,
+                        onChange: _.bind(_this21.props.updateBuckets, null, bucket) })
                 ));
             });
             return React.createElement(
@@ -1244,7 +1248,7 @@ var FieldType = (function (_React$Component10) {
     }, {
         key: "render",
         value: function render() {
-            var _this24 = this;
+            var _this23 = this;
 
             var h = this.props.header,
                 type = this.props.type,
@@ -1258,7 +1262,7 @@ var FieldType = (function (_React$Component10) {
                         key: i,
                         bsSize: "xsmall",
                         style: { marginRight: 5 },
-                        onClick: _.bind(_this24.props.showType, null, fields.get(i)) },
+                        onClick: _.bind(_this23.props.showType, null, fields.get(i)) },
                     t
                 );
             });

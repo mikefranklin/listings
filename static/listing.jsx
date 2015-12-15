@@ -25,7 +25,6 @@ class ListingApp {
         return this
     }
     loadAndRenderData() {
-        console.log(1)
         this.retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) { // headers, listings, keys, api
                 console.log(content)
@@ -331,7 +330,7 @@ class App extends React.Component { // props is js array of Immutable objects
             uniques = props.headers
                 .filter(h => h.get("show"))
                 .map(h => listings.reduce( (set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))
-                .map(entry => Immutable.Map(entry).keySeq()); // because infinite loop?
+                .map(entry => Immutable.Map(entry).keySeq()); // map rather than in reduce(), to avoid slowness/∞ loop
 
         this.state = {  maxDate: listings.maxBy(l => l.getIn(dtRef)).getIn(dtRef),
                         headers: showable.get(true),
@@ -353,14 +352,16 @@ class App extends React.Component { // props is js array of Immutable objects
         //                     () => this.saveHeaderValue(null, redfin, id, value)))
         // _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
     }
-    getSortedVisibleListings(s) {
+    getSortedVisibleListings(s, forceRank) {
         return s.allListings
                 .filter(l => !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate
                                 && l.get(s.keys.status).toLowerCase() == "active")
-                .sortBy(l => this.getListingSortbyValue(l, s))
+                .sortBy(l => this.getListingSortbyValue(l, s, forceRank))
     }
-    getListingSortbyValue(listing, state) {
-        return state.canRank ? this.getListingRankedValue(listing, state) : this.getListingSortValue(listing, state)
+    getListingSortbyValue(listing, state, forceRank) {
+        return state.canRank || forceRank
+            ? this.getListingRankedValue(listing, state)
+            : this.getListingSortValue(listing, state)
     }
     getListingSortValue(listing, s) {
         return s.headers
@@ -381,10 +382,9 @@ class App extends React.Component { // props is js array of Immutable objects
     }
 
     toggleRank(force) { // 1st param may be (ignored) mouse event or boolean
-        var state = _.clone(this.state),
-            shouldRank = typeof force == "boolean" && force ? true : state.canRank = !state.canRank;
-
-        state.listings = _.sortBy(state.listings, l => this.getListingSortValue(l, state.headers, shouldRank))
+        var isForce = typeof force == "boolean" && force,
+            state = !isForce ? {canRank: !this.state.canRank} : {};
+        state.listings = this.getSortedVisibleListings(this.state, isForce || state.canRank)
         this.setState(state)
     }
     toggleUK() {
@@ -752,25 +752,28 @@ class FieldEditor extends React.Component {
 
 class Buckets extends React.Component {
     shouldComponentUpdate(nextProps, nextState) {
-        return this.props.buckets != nextProps.buckets
+        return this.props.buckets !== nextProps.buckets
     }
-
     render() {
         if (!this.props) return false
         var buckets = [];
-        this.props.buckets.forEach((wc, bucket) => { // bucket = [weight, color]
-            buckets.push(<Col
+        Immutable.Map(this.props.buckets) // handles for undefined buckets
+            .map((wc, bucket) => [bucket, wc.get(0), wc.get(1)])
+            .sortBy(e => +e[0])
+            .forEach(bwc => {
+                var [bucket, weight, color] = bwc
+                buckets.push(<Col
                             key={"b" + bucket}
                             md={2}
-                            style={{backgroundColor: wc.get(1), height: 26, paddingTop: 3}}>
+                            style={{backgroundColor: color, height: 26, paddingTop: 3}}>
                             {bucket}
                             </Col>)
-            buckets.push(<Col
+                buckets.push(<Col
                             key={"v" + bucket}
                             md={2}>
                             <input
                                 type="text"
-                                defaultValue={wc.get(0)}
+                                defaultValue={weight}
                                 onChange={_.bind(this.props.updateBuckets, null, bucket)}/>
                         </Col>)})
         return (
