@@ -49,6 +49,7 @@ var ListingApp = (function () {
     _createClass(ListingApp, [{
         key: "loadAndRenderData",
         value: function loadAndRenderData() {
+            console.log(1);
             this.retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
                 // headers, listings, keys, api
                 console.log(content);
@@ -115,6 +116,11 @@ var Header = (function (_React$Component) {
                 handle: ".move",
                 update: _.bind(app.signaller.headersSorted.dispatch, null, sortNode)
             });
+        }
+    }, {
+        key: "componentWillReceiveProps",
+        value: function componentWillReceiveProps(nextProps) {
+            this.setState(nextProps);
         }
     }, {
         key: "shouldComponentUpdate",
@@ -395,8 +401,6 @@ var ListingItem = (function (_React$Component5) {
         value: function formatter_undef() {
             return "~undefined~";
         }
-        // formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')}
-
     }, {
         key: "formatter_string",
         value: function formatter_string(value, listing, keys, header, apikey, showUK) {
@@ -407,11 +411,6 @@ var ListingItem = (function (_React$Component5) {
         value: function formatter_number(value, listing, keys, header, apikey, showUK) {
             return showUK && header("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value;
         }
-        // formatter_object(obj) {
-        //     var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
-        //     return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
-        // }
-
     }, {
         key: "formatter_last_loaded",
         value: function formatter_last_loaded(value, listing, keys, header, apikey, showUK) {
@@ -476,7 +475,7 @@ var ListingItem = (function (_React$Component5) {
                 n = p.notes,
                 value = p.listing.get(h.get("_id")),
                 style = { overflow: "hidden", height: 20, whiteSpace: "nowrap" },
-                toggle = !h.toggleIcons ? null : {
+                toggle = !h.get("toggleIcons") ? null : {
                 onClick: _.bind(this.props.toggleIcon, null, p.listing, h.get("_id")),
                 className: "toggleicons" },
                 noteIcon = !h.notes ? null : React.createElement("i", { onClick: _.bind(this.openNoteWriter, this),
@@ -520,13 +519,16 @@ var App = (function (_React$Component6) {
             showable = props.headers.groupBy(function (h) {
             return h.get("show");
         }),
-            // sorted by sequence on server
-        listings = _this9.updateMath(props),
-            uniques = props.headers.map(function (h) {
-            return listings.map(function (l) {
-                return l.get(h.get("_id"));
-            }).toSet();
-        });
+            listings = _this9.updateMath(props),
+            uniques = props.headers.filter(function (h) {
+            return h.get("show");
+        }).map(function (h) {
+            return listings.reduce(function (set, l) {
+                set[l.get(h.get("_id"))] = true;return set;
+            }, {});
+        }).map(function (entry) {
+            return Immutable.Map(entry).keySeq();
+        }); // because infinite loop?
 
         _this9.state = { maxDate: listings.maxBy(function (l) {
                 return l.getIn(dtRef);
@@ -572,7 +574,7 @@ var App = (function (_React$Component6) {
         key: "getListingSortValue",
         value: function getListingSortValue(listing, s) {
             return s.headers.take(6).map(function (h) {
-                return listing.get(h.get("id"));
+                return listing.get(h.get("_id"));
             }) // id of data in listing
             .map(function (value) {
                 return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
@@ -681,25 +683,29 @@ var App = (function (_React$Component6) {
     }, {
         key: "updateMath",
         value: function updateMath(props) {
-            var listings = props.listings;
-            props.headers.filter(function (h) {
+            var listings = props.listings,
+                name2id = function name2id(t, h) {
+                t = t.replace(new RegExp(h.get("redfin")), 'l.get(' + h.get("_id") + ')');return t;
+            },
+                entries = props.headers.filter(function (h) {
                 return h.get("math");
-            }).forEach(function (h) {
-                var math = h.get("math"),
-                    id = h.get("_id");
-                props.headers.forEach(function (h2) {
-                    math = math.replace(new RegExp(h2.get("redfin")), // replace name-of-field
-                    'l.get(' + h2.get("_id") + ')'); // with reference-to-field
-                });
-                listings.forEach(function (l, index) {
-                    try {
-                        eval("listings[" + index + "] = l.set(" + id + ", " + math + ")");
-                    } catch (e) {
-                        l.set(id, "***");
-                    }
-                });
+            }).map(function (h) {
+                return [h.get("_id"), props.headers.reduce(name2id, h.get("math"))];
             });
-            return listings;
+            return listings.map(function (l) {
+                entries.forEach(function (entry) {
+                    var _entry = _slicedToArray(entry, 2);
+
+                    var id = _entry[0];
+                    var math = _entry[1];
+                    var value = "**";
+                    try {
+                        value = eval(math);
+                    } catch (e) {}
+                    l = l.set(id, value);
+                });
+                return l;
+            });
         }
     }, {
         key: "toggleCurrentActives",
@@ -881,7 +887,6 @@ var App = (function (_React$Component6) {
                     listing: listing,
                     headers: _this17.state.headers });
             });
-            console.log(this.state.listings);
             return React.createElement(
                 Grid,
                 { fluid: true },

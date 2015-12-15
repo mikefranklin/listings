@@ -25,6 +25,7 @@ class ListingApp {
         return this
     }
     loadAndRenderData() {
+        console.log(1)
         this.retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) { // headers, listings, keys, api
                 console.log(content)
@@ -78,6 +79,9 @@ class Header extends React.Component {
             handle: ".move",
             update:_.bind(app.signaller.headersSorted.dispatch, null, sortNode)
         })
+    }
+    componentWillReceiveProps(nextProps) {
+        this.setState(nextProps)
     }
     shouldComponentUpdate(nextProps, nextState) {
         return this.props.headers !== nextProps.headers
@@ -242,17 +246,12 @@ class ListingItem extends React.Component {
     //     return state
     // }
     formatter_undef() { return "~undefined~"}
-    // formatter_date(obj) { return new Date(obj.$date).toLocaleString('en-US')}
     formatter_string(value, listing, keys, header, apikey, showUK) {
         return showUK && header.get("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value
     }
     formatter_number(value, listing, keys, header, apikey, showUK) {
         return showUK && header("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value
     }
-    // formatter_object(obj) {
-    //     var f = _.find([["$date", "date"]], (pair) => {return obj[pair[0]] !== undefined})
-    //     return f ? this["formatter_" + f[1]](obj) : this.formatter_undef()
-    // }
     formatter_last_loaded(value, listing, keys, header, apikey, showUK) {
         return new Date(value.get("$date").toLocaleString('en-US'))
     }
@@ -295,7 +294,7 @@ class ListingItem extends React.Component {
             n = p.notes,
             value = p.listing.get(h.get("_id")),
             style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
-            toggle = !h.toggleIcons ? null : {
+            toggle = !h.get("toggleIcons") ? null : {
                         onClick: _.bind(this.props.toggleIcon, null, p.listing, h.get("_id")),
                         className: "toggleicons"},
             noteIcon = !h.notes ? null
@@ -327,9 +326,12 @@ class App extends React.Component { // props is js array of Immutable objects
         super(props)
         var keys = props.keys.toJS(), // no need for them to be immutable
             dtRef = [keys.last_loaded, "$date"],
-            showable = props.headers.groupBy(h => h.get("show")), // sorted by sequence on server
+            showable = props.headers.groupBy(h => h.get("show")),
             listings = this.updateMath(props),
-            uniques = props.headers.map(h => listings.map(l => l.get(h.get("_id"))).toSet());
+            uniques = props.headers
+                .filter(h => h.get("show"))
+                .map(h => listings.reduce( (set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))
+                .map(entry => Immutable.Map(entry).keySeq()); // because infinite loop?
 
         this.state = {  maxDate: listings.maxBy(l => l.getIn(dtRef)).getIn(dtRef),
                         headers: showable.get(true),
@@ -363,7 +365,7 @@ class App extends React.Component { // props is js array of Immutable objects
     getListingSortValue(listing, s) {
         return s.headers
                 .take(6)
-                .map(h => listing.get(h.get("id"))) // id of data in listing
+                .map(h => listing.get(h.get("_id"))) // id of data in listing
                 .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
                 .toJS()
                 .join("$")
@@ -439,25 +441,20 @@ class App extends React.Component { // props is js array of Immutable objects
             }.bind(this))
     }
     updateMath(props) {
-        var listings = props.listings;
-        props.headers
-            .filter(h => h.get("math"))
-            .forEach(h => {
-                var math = h.get("math"),
-                    id = h.get("_id");
-                props.headers.forEach(h2 => {math = math.replace(
-                                                new RegExp(h2.get("redfin")), // replace name-of-field
-                                                'l.get(' + h2.get("_id") + ')') // with reference-to-field
-                                            })
-                listings.forEach((l, index) => {
-                    try {
-                        eval("listings[" + index + "] = l.set(" + id + ", " + math + ")")
-                    } catch(e) {
-                        l.set(id, "***")
-                    }
+        var listings = props.listings,
+            name2id = (t, h) => { t = t.replace(new RegExp(h.get("redfin")), 'l.get(' + h.get("_id") + ')'); return t},
+            entries = props.headers
+                        .filter(h => h.get("math"))
+                        .map(h => [h.get("_id"), props.headers.reduce(name2id, h.get("math"))])
+        return listings.map(l => {
+                    entries.forEach(entry => {
+                        var [id, math] = entry,
+                            value = "**";
+                        try { value = eval(math) } catch(e) {}
+                        l = l.set(id, value)
+                    })
+                    return l
                 })
-            })
-        return listings
     }
     toggleCurrentActives() {
         var state = _.clone(this.state),
@@ -584,7 +581,6 @@ class App extends React.Component { // props is js array of Immutable objects
                     keys={this.props.keys}
                     listing={listing}
                     headers={this.state.headers}/>))
-        console.log(this.state.listings)
         return (
             <Grid fluid={true}>
                 <Control
