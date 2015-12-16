@@ -541,7 +541,7 @@ var App = (function (_React$Component6) {
 
         _this9.state.listings = _this9.getSortedVisibleListings(_this9.state, false);
         app.signaller.headersSorted.add(_.bind(_this9.reorderHeaders, _this9));
-        // _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
+        _this9.updateDistances();
         return _this9;
     }
 
@@ -592,30 +592,39 @@ var App = (function (_React$Component6) {
             this.setState({ showUK: !this.state.showUK });
         }
     }, {
+        key: "getDistanceOpts",
+        value: function getDistanceOpts() {
+            var headers = this.state.headers.filter(function (h) {
+                return h.get("distanceTo");
+            }),
+                lat = this.props.keys.get("latitude"),
+                long = this.props.keys.get("longitude"),
+                opts = { map: [],
+                wait: 1000,
+                directionsService: new google.maps.DirectionsService() };
+            this.state.listings.forEach(function (l, index) {
+                headers.filter(function (h) {
+                    return !l.get(h.get("_id"));
+                }).forEach(function (h) {
+                    return opts.map.push([index, l.get(0), l.get(lat), l.get(long), h.get("_id"), h.get("distanceTo"), h.get("redfin")]);
+                });
+            });
+            return opts;
+        }
+    }, {
         key: "updateDistances",
         value: function updateDistances(opts) {
             var _this10 = this;
 
-            if (!opts) {
-                var lat = this.props.keys.latitude,
-                    long = this.props.keys.longitude,
-                    headers = _.filter(this.state.headers, function (h) {
-                    return !_.isEmpty(h.distanceTo);
-                });
-                if (!headers.length) return;
-                opts = { map: [], wait: 1000,
-                    base: { travelMode: google.maps.TravelMode.WALKING },
-                    directionsService: new google.maps.DirectionsService() };
-                _.each(this.state.listings, function (l, index) {
-                    _.each(headers, function (h) {
-                        if (!l[h._id]) opts.map.push([index, l[0], l[lat], l[long], h._id, h.distanceTo, h.redfin]);
-                    });
-                });
-                if (!opts.map.length) return;
+            var index, listing_id, lat, long, id, distanceTo, headerName, request, duration;
+            if ((typeof google === "undefined" ? "undefined" : _typeof(google)) != "object") {
+                console.log("waiting 250ms for google");
+                _.delay(_.bind(this.updateDistances, this), 250);
+                return;
             }
+            if (!opts) opts = this.getDistanceOpts();
 
             if (!opts.map.length) return;
-            var index, listing_id, lat, long, id, distanceTo, headerName;
 
             var _opts$map$pop = opts.map.pop();
 
@@ -629,19 +638,17 @@ var App = (function (_React$Component6) {
             distanceTo = _opts$map$pop2[5];
             headerName = _opts$map$pop2[6];
 
-            var request = _.clone(opts.base);
-            _.extend(request, { origin: lat + "," + long, destination: distanceTo });
+            request = { travelMode: google.maps.TravelMode.WALKING,
+                origin: lat + "," + long, destination: distanceTo };
+
             opts.directionsService.route(request, function (response, status) {
-                var duration;
                 try {
                     duration = parseInt(response.routes[0].legs[0].duration.text); // distance.text, duration.text
                 } catch (e) {
                     console.log("error getting directions for", request, e);
                     duration = 0;
                 }
-                var state = _.clone(_this10.state);
-                state.listings[index][id] = duration;
-                _this10.setState(state);
+                _this10.setState({ listings: _this10.state.listings.setIn([index, id], duration) });
                 _this10.updateListingDB(listing_id, headerName, duration);
             });
 

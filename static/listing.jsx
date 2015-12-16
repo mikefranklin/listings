@@ -340,7 +340,7 @@ class App extends React.Component { // props is js array of Immutable objects
 
         this.state.listings =  this.getSortedVisibleListings(this.state, false)
         app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
-        // _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
+        this.updateDistances()
     }
     getSortedVisibleListings(s, shouldRank) {
         var headers = shouldRank
@@ -372,41 +372,47 @@ class App extends React.Component { // props is js array of Immutable objects
     toggleUK() {
         this.setState({showUK: !this.state.showUK})
     }
-    updateDistances(opts) {
-        if (!opts) {
-            var lat = this.props.keys.latitude,
-                long = this.props.keys.longitude,
-                headers = _.filter(this.state.headers, h => !_.isEmpty(h.distanceTo))
-            if (!headers.length) return
-            opts = {map: [], wait: 1000,
-                base: {travelMode: google.maps.TravelMode.WALKING},
-                directionsService: new google.maps.DirectionsService()}
-            _.each(this.state.listings, (l, index) => {
-                _.each(headers, h => {
-                    if (!l[h._id]) opts.map.push([index, l[0], l[lat], l[long],
-                                                    h._id, h.distanceTo, h.redfin])
+    getDistanceOpts() {
+        var headers = this.state.headers.filter(h => h.get("distanceTo")),
+            lat = this.props.keys.get("latitude"),
+            long = this.props.keys.get("longitude"),
+            opts = {map: [],
+                    wait: 1000,
+                    directionsService: new google.maps.DirectionsService()};
+        this.state.listings
+            .forEach((l, index) => {
+                headers
+                    .filter(h => !l.get(h.get("_id")))
+                    .forEach(h => opts.map.push(
+                        [index, l.get(0), l.get(lat),l.get(long),
+                         h.get("_id"), h.get("distanceTo"),h.get("redfin")
+                        ]))
                 })
-            })
-            if (!opts.map.length) return
+        return opts
+    }
+    updateDistances(opts) {
+        var index, listing_id, lat, long, id, distanceTo, headerName, request, duration
+        if (typeof google != "object") {
+            console.log("waiting 250ms for google");
+            _.delay(_.bind(this.updateDistances, this), 250)
+            return
         }
+        if (!opts) opts = this.getDistanceOpts()
 
         if (!opts.map.length) return
-        var index, listing_id, lat, long, id, distanceTo, headerName
-        [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
 
-        var request = _.clone(opts.base);
-        _.extend(request, {origin: lat + "," + long, destination: distanceTo})
+        [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
+        request = {travelMode: google.maps.TravelMode.WALKING,
+                    origin: lat + "," + long, destination: distanceTo}
+
         opts.directionsService.route(request, (response, status) => {
-            var duration;
             try {
                 duration = parseInt(response.routes[0].legs[0].duration.text) // distance.text, duration.text
            } catch (e) {
                 console.log("error getting directions for", request, e)
                 duration=0
             }
-            var state = _.clone(this.state)
-            state.listings[index][id] = duration
-            this.setState(state)
+            this.setState({listings: this.state.listings.setIn([index, id], duration)})
             this.updateListingDB(listing_id, headerName, duration)
         })
 
