@@ -130,7 +130,7 @@ class HeaderItem extends React.Component {
             <Col md={1} data-id={header.get("_id")} className="item">
                 {this.props.canMove ? move : null}
                 <div className="edit" onClick={_.bind(this.openFieldEditor, this)}>
-                    {this.props.showUK && header.ukText ? header.get("ukText") : header.get("text")}
+                    {this.props.showUK && header.get("ukText") ? header.get("ukText") : header.get("text")}
                 </div>
                 <div className="togglevis" onClick={_.bind(this.props.hide, null, header.get("_id"))}>
                     <i className="fa fa-bolt"/>
@@ -205,7 +205,7 @@ class Control extends React.Component {
 class Listing extends React.Component {
     shouldComponentUpdate(nextProps, nextState) {
         return this.props.canRank != nextProps.canRank
-                || this.props.showUK != nextProps.canRank
+                || this.props.showUK != nextProps.showUK
                 || this.props.listing !== nextProps.listing
                 || this.props.headers !== nextProps.headers
     }
@@ -213,7 +213,6 @@ class Listing extends React.Component {
         if (!this.props) return false
         var items = this.props.headers.map(header => (
                 <ListingItem
-                    updateState={this.props.updateState}
                     toggleIcon={this.props.toggleIcon}
                     listing={this.props.listing}
                     canRank={this.props.canRank}
@@ -237,19 +236,12 @@ class ListingItem extends React.Component {
                 || this.props.showUK != nextProps.showUK
                 || this.props.listing !== nextProps.listing
     }
-    // updateState(updater, save) {
-    //     var state = _.clone(this.state);
-    //     updater(state)
-    //     this.setState(state)
-    //     if (save) save()
-    //     return state
-    // }
     formatter_undef() { return "~undefined~"}
     formatter_string(value, listing, keys, header, apikey, showUK) {
         return showUK && header.get("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value
     }
     formatter_number(value, listing, keys, header, apikey, showUK) {
-        return showUK && header("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value
+        return showUK && header.get("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value
     }
     formatter_last_loaded(value, listing, keys, header, apikey, showUK) {
         return new Date(value.get("$date").toLocaleString('en-US'))
@@ -285,7 +277,6 @@ class ListingItem extends React.Component {
     closeNoteWriter(id, redfin, event) {
         this.setState({showModal: false})
     }
-
     render() { // notes = [date, redfin_field, content]
         if (!this.props) return false
         var p = this.props,
@@ -299,10 +290,12 @@ class ListingItem extends React.Component {
             noteIcon = !h.notes ? null
                 : (<i   onClick={_.bind(this.openNoteWriter, this)}
                         className={"pull-right fa fa-pencil notes " + ["off", "on"][+!!n.size()]}></i>),
+            bucketColor,
             bucket;
         if (p.canRank && h.get("bucketSize") && h.get("buckets")) {
-            bucket = h.get("buckets").get([Math.floor(value / h.get("bucketSize")) * h.get("bucketSize")])
-            if (bucket) _.extend(style, {backgroundColor: bucket.get(1)})
+            bucket = Math.floor(value / h.get("bucketSize")) * h.get("bucketSize")
+            bucketColor = h.getIn(["buckets", String(bucket), 1])
+            if (bucketColor) _.extend(style, {backgroundColor: bucketColor})
         }
         return (
             <Col md={1} style={style} {...toggle}>
@@ -314,7 +307,6 @@ class ListingItem extends React.Component {
             </Col>
         )
         // header={this.state.header}
-        // update={_.bind(this.updateState, this)}
         //
 
     }
@@ -330,7 +322,7 @@ class App extends React.Component { // props is js array of Immutable objects
             uniques = props.headers
                 .filter(h => h.get("show"))
                 .map(h => listings.reduce( (set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))
-                .map(entry => Immutable.Map(entry).keySeq()); // map rather than in reduce(), to avoid slowness/∞ loop
+                .map( (entry, key) => Immutable.Map(entry).keySeq()); // map rather than in reduce(), to avoid slowness/∞ loop
 
         this.state = {  maxDate: listings.maxBy(l => l.getIn(dtRef)).getIn(dtRef),
                         headers: showable.get(true),
@@ -342,45 +334,35 @@ class App extends React.Component { // props is js array of Immutable objects
                         uniques: uniques, // unique values by field
                         canMove: false,
                         canRank: false,
+                        showUK: false,
                         dtRef: dtRef,
                         keys: keys}
 
-        this.state.listings =  this.getSortedVisibleListings(this.state)
+        this.state.listings =  this.getSortedVisibleListings(this.state, false)
         app.signaller.headersSorted.add(_.bind(this.reorderHeaders, this))
-        // app.signaller.headerUpdated.add((id, redfin, value) =>
-        //     this.updateState(s => s.headers[id][redfin] = value,
-        //                     () => this.saveHeaderValue(null, redfin, id, value)))
         // _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
     }
-    getSortedVisibleListings(s, forceRank) {
+    getSortedVisibleListings(s, shouldRank) {
+        var headers = shouldRank
+                ? s.headers.filter(h => h.get("bucketSize") && h.get("buckets"))
+                : s.headers.take(6).map(h => h.get("_id")),
+            fn = shouldRank
+                ? (listing, headers) => headers.reduce((ranking, h) => {
+                        var bucket = Math.floor(listing.get(h.get("_id")) / h.get("bucketSize")) * h.get("bucketSize"),
+                            weight = parseInt(h.getIn(["buckets", String(bucket), 0])|| 0), // bucket is [weight, color]
+                            mult = parseInt(h.get("bucketMultiplier") || 1);
+                        return ranking - (weight * mult)}, 0)
+                : (listing, headers) => headers
+                        .map(id => listing.get(id)) // id of data in listing
+                        .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
+                        .toJS()
+                        .join("$")
+
         return s.allListings
                 .filter(l => !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate
                                 && l.get(s.keys.status).toLowerCase() == "active")
-                .sortBy(l => this.getListingSortbyValue(l, s, forceRank))
+                .sortBy(l => fn(l, headers))
     }
-    getListingSortbyValue(listing, state, forceRank) {
-        return state.canRank || forceRank
-            ? this.getListingRankedValue(listing, state)
-            : this.getListingSortValue(listing, state)
-    }
-    getListingSortValue(listing, s) {
-        return s.headers
-                .take(6)
-                .map(h => listing.get(h.get("_id"))) // id of data in listing
-                .map(value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value)
-                .toJS()
-                .join("$")
-    }
-    getListingRankedValue(listing, s) {
-        return s.headers
-                .filter(h => h.get("bucketSize") && h.get("buckets"))
-                .reduce((ranking, h) => {
-                    var bucket = Math.floor(listing.get(h.get("_id") / h.get("bucketSize")) * h.get("bucketSize")),
-                        value = parseInt(h.get("buckets")[bucket] || 0),
-                        mult = parseInt(h.bucketMultiplier || 1);
-                    return ranking - (value * mult)}, 0)
-    }
-
     toggleRank(force) { // 1st param may be (ignored) mouse event or boolean
         var isForce = typeof force == "boolean" && force,
             state = !isForce ? {canRank: !this.state.canRank} : {};
@@ -388,7 +370,7 @@ class App extends React.Component { // props is js array of Immutable objects
         this.setState(state)
     }
     toggleUK() {
-        this.updateState(s => s.showUK = !s.showUK)
+        this.setState({showUK: !this.state.showUK})
     }
     updateDistances(opts) {
         if (!opts) {
@@ -457,46 +439,25 @@ class App extends React.Component { // props is js array of Immutable objects
                 })
     }
     toggleCurrentActives() {
-        var state = _.clone(this.state),
-            keys = this.props.keys,
-            dt = keys.last_loaded;
-
-        state.currentActivesOnly = !state.currentActivesOnly
-        state.listings = _.chain(state.allListings)
-                            .filter(l => !state.currentActivesOnly
-                                            || l[dt].$date == state.maxDate
-                                            && l[keys.status].toLowerCase() == "active")
-                            .sortBy(l => this.getListingSortValue(l, state.headers, state.canRank))
-                            .value()
-
+        var state = this.state.set("currentActivesOnly", !this.state.get("currentActivesOnly"));
+        state.listings = this.getSortedVisibleListings(state, state.get("canRank"))
         this.setState(state)
     }
     toggleMove() {
         this.setState({canMove: !this.state.canMove})
     }
     showHeader(id) {
-        this.updateState(s => this.toggleHeaderVisibility(s.hidden, s.headers, id, true),
-                () => this.saveHeaderValue(null, "show", id, true))
+        this.toggleHeaderVisibility("hidden", "headers", id, true)
     }
     hideHeader(id) {
-        this.updateState(s => this.toggleHeaderVisibility(s.headers, s.hidden, id, true),
-                        () => this.saveHeaderValue(null, "show", id, false))
-    }
-    // saveHeader(header) {
-    //     this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
-    //                     () => this.saveHeader(header))
-    // }
-    updateState(updater, save) {
-        var state = _.clone(this.state);
-        updater(state)
-        this.setState(state)
-        if (save) save()
-        return state
+        this.toggleHeaderVisibility("headers", "hidden", id, false)
     }
     toggleHeaderVisibility(source, target, id, show) {
-        return  _.sortBy(target.push(
-            _.extend(source.splice(_.findIndex(source, h => h._id == id), 1)[0], {show: show}
-        )), "sequence")
+        var index = this.state[source].findIndex(h => h.get("_id") == id), // one to show
+            entry = this.state[source].get(index).set("show", true)
+        this.setState({[target]: this.state[target].push(entry).sortBy(h => h.get("sequence")),
+                        [source]: this.state[source].splice(index, 1)})
+        this.saveHeaderValue(null, "show", id, show)
     }
     reorderHeaders(sortNode) {
         var ids = sortNode.sortable("toArray", {attribute: "data-id"}),
@@ -561,19 +522,20 @@ class App extends React.Component { // props is js array of Immutable objects
             }.bind(this))
     }
     toggleIcon(listing, hId, event) {
-        var value = listing[hId],
-            header = _.find(this.state.headers, h => h._id == hId),
-            icons = header.toggleIcons.split(","),
-            icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length];
-        this.updateState(s => _.find(s.listings, l => l[0] == listing[0])[hId] = icon,
-                        s => this.updateListingDB(listing[0], header.redfin, icon))
+        var value = listing.get(hId),
+            header = this.state.headers.find(h => h.get("_id") == hId),
+            icons = header.get("toggleIcons").split(","),
+            icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length],
+            pos = this.state.listings.findIndex(l => l.get(0) == listing.get(0));
+
+        this.setState({listings: this.state.listings.setIn([pos, hId], icon)})
+        this.updateListingDB(listing.get(0), header.get("redfin"), icon)
     }
     render() {
         // in listing:                     notes={this.state.notes[listing[0]]}
         var listings = this.state.listings.map(listing => (
                 <Listing
                     toggleIcon={_.bind(this.toggleIcon, this)}
-                    updateState={_.bind(this.updateState, this)}
                     canRank={this.state.canRank}
                     showUK={this.state.showUK}
                     api={this.props.api}

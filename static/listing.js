@@ -20,6 +20,8 @@ var _extends = Object.assign || function (target) { for (var i = 1; i < argument
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
 function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
@@ -203,7 +205,7 @@ var HeaderItem = (function (_React$Component2) {
                 React.createElement(
                     "div",
                     { className: "edit", onClick: _.bind(this.openFieldEditor, this) },
-                    this.props.showUK && header.ukText ? header.get("ukText") : header.get("text")
+                    this.props.showUK && header.get("ukText") ? header.get("ukText") : header.get("text")
                 ),
                 React.createElement(
                     "div",
@@ -338,7 +340,7 @@ var Listing = (function (_React$Component4) {
     _createClass(Listing, [{
         key: "shouldComponentUpdate",
         value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props.canRank != nextProps.canRank || this.props.showUK != nextProps.canRank || this.props.listing !== nextProps.listing || this.props.headers !== nextProps.headers;
+            return this.props.canRank != nextProps.canRank || this.props.showUK != nextProps.showUK || this.props.listing !== nextProps.listing || this.props.headers !== nextProps.headers;
         }
     }, {
         key: "render",
@@ -348,7 +350,6 @@ var Listing = (function (_React$Component4) {
             if (!this.props) return false;
             var items = this.props.headers.map(function (header) {
                 return React.createElement(ListingItem, {
-                    updateState: _this7.props.updateState,
                     toggleIcon: _this7.props.toggleIcon,
                     listing: _this7.props.listing,
                     canRank: _this7.props.canRank,
@@ -387,14 +388,6 @@ var ListingItem = (function (_React$Component5) {
         value: function shouldComponentUpdate(nextProps, nextState) {
             return this.props.canRank != nextProps.canRank || this.props.showUK != nextProps.showUK || this.props.listing !== nextProps.listing;
         }
-        // updateState(updater, save) {
-        //     var state = _.clone(this.state);
-        //     updater(state)
-        //     this.setState(state)
-        //     if (save) save()
-        //     return state
-        // }
-
     }, {
         key: "formatter_undef",
         value: function formatter_undef() {
@@ -408,7 +401,7 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "formatter_number",
         value: function formatter_number(value, listing, keys, header, apikey, showUK) {
-            return showUK && header("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value;
+            return showUK && header.get("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value;
         }
     }, {
         key: "formatter_last_loaded",
@@ -479,10 +472,12 @@ var ListingItem = (function (_React$Component5) {
                 className: "toggleicons" },
                 noteIcon = !h.notes ? null : React.createElement("i", { onClick: _.bind(this.openNoteWriter, this),
                 className: "pull-right fa fa-pencil notes " + ["off", "on"][+!!n.size()] }),
+                bucketColor,
                 bucket;
             if (p.canRank && h.get("bucketSize") && h.get("buckets")) {
-                bucket = h.get("buckets").get([Math.floor(value / h.get("bucketSize")) * h.get("bucketSize")]);
-                if (bucket) _.extend(style, { backgroundColor: bucket.get(1) });
+                bucket = Math.floor(value / h.get("bucketSize")) * h.get("bucketSize");
+                bucketColor = h.getIn(["buckets", String(bucket), 1]);
+                if (bucketColor) _.extend(style, { backgroundColor: bucketColor });
             }
             return React.createElement(
                 Col,
@@ -494,7 +489,6 @@ var ListingItem = (function (_React$Component5) {
                     showModal: this.state.showModal })
             );
             // header={this.state.header}
-            // update={_.bind(this.updateState, this)}
             //
         }
     }]);
@@ -525,7 +519,7 @@ var App = (function (_React$Component6) {
             return listings.reduce(function (set, l) {
                 set[l.get(h.get("_id"))] = true;return set;
             }, {});
-        }).map(function (entry) {
+        }).map(function (entry, key) {
             return Immutable.Map(entry).keySeq();
         }); // map rather than in reduce(), to avoid slowness/∞ loop
 
@@ -541,56 +535,47 @@ var App = (function (_React$Component6) {
             uniques: uniques, // unique values by field
             canMove: false,
             canRank: false,
+            showUK: false,
             dtRef: dtRef,
             keys: keys };
 
-        _this9.state.listings = _this9.getSortedVisibleListings(_this9.state);
+        _this9.state.listings = _this9.getSortedVisibleListings(_this9.state, false);
         app.signaller.headersSorted.add(_.bind(_this9.reorderHeaders, _this9));
-        // app.signaller.headerUpdated.add((id, redfin, value) =>
-        //     this.updateState(s => s.headers[id][redfin] = value,
-        //                     () => this.saveHeaderValue(null, redfin, id, value)))
         // _.delay(_.bind(this.updateDistances, this), 1000); // wait for google to load?
         return _this9;
     }
 
     _createClass(App, [{
         key: "getSortedVisibleListings",
-        value: function getSortedVisibleListings(s, forceRank) {
-            var _this10 = this;
+        value: function getSortedVisibleListings(s, shouldRank) {
+            var headers = shouldRank ? s.headers.filter(function (h) {
+                return h.get("bucketSize") && h.get("buckets");
+            }) : s.headers.take(6).map(function (h) {
+                return h.get("_id");
+            }),
+                fn = shouldRank ? function (listing, headers) {
+                return headers.reduce(function (ranking, h) {
+                    var bucket = Math.floor(listing.get(h.get("_id")) / h.get("bucketSize")) * h.get("bucketSize"),
+                        weight = parseInt(h.getIn(["buckets", String(bucket), 0]) || 0),
+                        // bucket is [weight, color]
+                    mult = parseInt(h.get("bucketMultiplier") || 1);
+                    return ranking - weight * mult;
+                }, 0);
+            } : function (listing, headers) {
+                return headers.map(function (id) {
+                    return listing.get(id);
+                }) // id of data in listing
+                .map(function (value) {
+                    return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
+                    );
+                }).toJS().join("$");
+            };
 
             return s.allListings.filter(function (l) {
                 return !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate && l.get(s.keys.status).toLowerCase() == "active";
             }).sortBy(function (l) {
-                return _this10.getListingSortbyValue(l, s, forceRank);
+                return fn(l, headers);
             });
-        }
-    }, {
-        key: "getListingSortbyValue",
-        value: function getListingSortbyValue(listing, state, forceRank) {
-            return state.canRank || forceRank ? this.getListingRankedValue(listing, state) : this.getListingSortValue(listing, state);
-        }
-    }, {
-        key: "getListingSortValue",
-        value: function getListingSortValue(listing, s) {
-            return s.headers.take(6).map(function (h) {
-                return listing.get(h.get("_id"));
-            }) // id of data in listing
-            .map(function (value) {
-                return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
-                );
-            }).toJS().join("$");
-        }
-    }, {
-        key: "getListingRankedValue",
-        value: function getListingRankedValue(listing, s) {
-            return s.headers.filter(function (h) {
-                return h.get("bucketSize") && h.get("buckets");
-            }).reduce(function (ranking, h) {
-                var bucket = Math.floor(listing.get(h.get("_id") / h.get("bucketSize")) * h.get("bucketSize")),
-                    value = parseInt(h.get("buckets")[bucket] || 0),
-                    mult = parseInt(h.bucketMultiplier || 1);
-                return ranking - value * mult;
-            }, 0);
         }
     }, {
         key: "toggleRank",
@@ -604,14 +589,12 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleUK",
         value: function toggleUK() {
-            this.updateState(function (s) {
-                return s.showUK = !s.showUK;
-            });
+            this.setState({ showUK: !this.state.showUK });
         }
     }, {
         key: "updateDistances",
         value: function updateDistances(opts) {
-            var _this11 = this;
+            var _this10 = this;
 
             if (!opts) {
                 var lat = this.props.keys.latitude,
@@ -656,10 +639,10 @@ var App = (function (_React$Component6) {
                     console.log("error getting directions for", request, e);
                     duration = 0;
                 }
-                var state = _.clone(_this11.state);
+                var state = _.clone(_this10.state);
                 state.listings[index][id] = duration;
-                _this11.setState(state);
-                _this11.updateListingDB(listing_id, headerName, duration);
+                _this10.setState(state);
+                _this10.updateListingDB(listing_id, headerName, duration);
             });
 
             _.delay(_.bind(this.updateDistances, this), opts.wait, opts);
@@ -704,19 +687,8 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleCurrentActives",
         value: function toggleCurrentActives() {
-            var _this12 = this;
-
-            var state = _.clone(this.state),
-                keys = this.props.keys,
-                dt = keys.last_loaded;
-
-            state.currentActivesOnly = !state.currentActivesOnly;
-            state.listings = _.chain(state.allListings).filter(function (l) {
-                return !state.currentActivesOnly || l[dt].$date == state.maxDate && l[keys.status].toLowerCase() == "active";
-            }).sortBy(function (l) {
-                return _this12.getListingSortValue(l, state.headers, state.canRank);
-            }).value();
-
+            var state = this.state.set("currentActivesOnly", !this.state.get("currentActivesOnly"));
+            state.listings = this.getSortedVisibleListings(state, state.get("canRank"));
             this.setState(state);
         }
     }, {
@@ -727,45 +699,27 @@ var App = (function (_React$Component6) {
     }, {
         key: "showHeader",
         value: function showHeader(id) {
-            var _this13 = this;
-
-            this.updateState(function (s) {
-                return _this13.toggleHeaderVisibility(s.hidden, s.headers, id, true);
-            }, function () {
-                return _this13.saveHeaderValue(null, "show", id, true);
-            });
+            this.toggleHeaderVisibility("hidden", "headers", id, true);
         }
     }, {
         key: "hideHeader",
         value: function hideHeader(id) {
-            var _this14 = this;
-
-            this.updateState(function (s) {
-                return _this14.toggleHeaderVisibility(s.headers, s.hidden, id, true);
-            }, function () {
-                return _this14.saveHeaderValue(null, "show", id, false);
-            });
-        }
-        // saveHeader(header) {
-        //     this.updateState(s => s.headers[_.findIndex(s.headers, h => h._id == header._id)] = header,
-        //                     () => this.saveHeader(header))
-        // }
-
-    }, {
-        key: "updateState",
-        value: function updateState(updater, save) {
-            var state = _.clone(this.state);
-            updater(state);
-            this.setState(state);
-            if (save) save();
-            return state;
+            this.toggleHeaderVisibility("headers", "hidden", id, false);
         }
     }, {
         key: "toggleHeaderVisibility",
         value: function toggleHeaderVisibility(source, target, id, show) {
-            return _.sortBy(target.push(_.extend(source.splice(_.findIndex(source, function (h) {
-                return h._id == id;
-            }), 1)[0], { show: show })), "sequence");
+            var _setState;
+
+            var index = this.state[source].findIndex(function (h) {
+                return h.get("_id") == id;
+            }),
+                // one to show
+            entry = this.state[source].get(index).set("show", true);
+            this.setState((_setState = {}, _defineProperty(_setState, target, this.state[target].push(entry).sortBy(function (h) {
+                return h.get("sequence");
+            })), _defineProperty(_setState, source, this.state[source].splice(index, 1)), _setState));
+            this.saveHeaderValue(null, "show", id, show);
         }
     }, {
         key: "reorderHeaders",
@@ -847,39 +801,35 @@ var App = (function (_React$Component6) {
     }, {
         key: "toggleIcon",
         value: function toggleIcon(listing, hId, event) {
-            var _this15 = this;
-
-            var value = listing[hId],
-                header = _.find(this.state.headers, function (h) {
-                return h._id == hId;
+            var value = listing.get(hId),
+                header = this.state.headers.find(function (h) {
+                return h.get("_id") == hId;
             }),
-                icons = header.toggleIcons.split(","),
-                icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length];
-            this.updateState(function (s) {
-                return _.find(s.listings, function (l) {
-                    return l[0] == listing[0];
-                })[hId] = icon;
-            }, function (s) {
-                return _this15.updateListingDB(listing[0], header.redfin, icon);
+                icons = header.get("toggleIcons").split(","),
+                icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length],
+                pos = this.state.listings.findIndex(function (l) {
+                return l.get(0) == listing.get(0);
             });
+
+            this.setState({ listings: this.state.listings.setIn([pos, hId], icon) });
+            this.updateListingDB(listing.get(0), header.get("redfin"), icon);
         }
     }, {
         key: "render",
         value: function render() {
-            var _this16 = this;
+            var _this11 = this;
 
             // in listing:                     notes={this.state.notes[listing[0]]}
             var listings = this.state.listings.map(function (listing) {
                 return React.createElement(Listing, {
-                    toggleIcon: _.bind(_this16.toggleIcon, _this16),
-                    updateState: _.bind(_this16.updateState, _this16),
-                    canRank: _this16.state.canRank,
-                    showUK: _this16.state.showUK,
-                    api: _this16.props.api,
+                    toggleIcon: _.bind(_this11.toggleIcon, _this11),
+                    canRank: _this11.state.canRank,
+                    showUK: _this11.state.showUK,
+                    api: _this11.props.api,
                     key: listing.get(0),
-                    keys: _this16.props.keys,
+                    keys: _this11.props.keys,
                     listing: listing,
-                    headers: _this16.state.headers });
+                    headers: _this11.state.headers });
             });
             return React.createElement(
                 Grid,
@@ -918,10 +868,10 @@ var NoteWriter = (function (_React$Component7) {
     function NoteWriter(props) {
         _classCallCheck(this, NoteWriter);
 
-        var _this17 = _possibleConstructorReturn(this, Object.getPrototypeOf(NoteWriter).call(this, props));
+        var _this12 = _possibleConstructorReturn(this, Object.getPrototypeOf(NoteWriter).call(this, props));
 
-        _this17.state = _.clone(props);
-        return _this17;
+        _this12.state = _.clone(props);
+        return _this12;
     }
 
     _createClass(NoteWriter, [{
@@ -1017,10 +967,10 @@ var FieldEditor = (function (_React$Component8) {
     function FieldEditor(props) {
         _classCallCheck(this, FieldEditor);
 
-        var _this18 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
+        var _this13 = _possibleConstructorReturn(this, Object.getPrototypeOf(FieldEditor).call(this, props));
 
-        _this18.state = props;
-        return _this18;
+        _this13.state = props;
+        return _this13;
     }
 
     _createClass(FieldEditor, [{
@@ -1079,7 +1029,7 @@ var FieldEditor = (function (_React$Component8) {
     }, {
         key: "render",
         value: function render() {
-            var _this19 = this;
+            var _this14 = this;
 
             var header = this.state.header,
                 id = header.get("_id"),
@@ -1094,7 +1044,7 @@ var FieldEditor = (function (_React$Component8) {
                 return header.get(n);
             }),
                 isType = function isType(t) {
-                return type == t || _this19.state.showType == t;
+                return type == t || _this14.state.showType == t;
             };
             return React.createElement(
                 Modal,
@@ -1171,7 +1121,7 @@ var Buckets = (function (_React$Component9) {
     }, {
         key: "render",
         value: function render() {
-            var _this21 = this;
+            var _this16 = this;
 
             if (!this.props) return false;
             var buckets = [];
@@ -1203,7 +1153,7 @@ var Buckets = (function (_React$Component9) {
                     React.createElement("input", {
                         type: "text",
                         defaultValue: weight,
-                        onChange: _.bind(_this21.props.updateBuckets, null, bucket) })
+                        onChange: _.bind(_this16.props.updateBuckets, null, bucket) })
                 ));
             });
             return React.createElement(
@@ -1248,7 +1198,7 @@ var FieldType = (function (_React$Component10) {
     }, {
         key: "render",
         value: function render() {
-            var _this23 = this;
+            var _this18 = this;
 
             var h = this.props.header,
                 type = this.props.type,
@@ -1262,7 +1212,7 @@ var FieldType = (function (_React$Component10) {
                         key: i,
                         bsSize: "xsmall",
                         style: { marginRight: 5 },
-                        onClick: _.bind(_this23.props.showType, null, fields.get(i)) },
+                        onClick: _.bind(_this18.props.showType, null, fields.get(i)) },
                     t
                 );
             });
