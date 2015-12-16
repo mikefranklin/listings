@@ -1,10 +1,4 @@
 "use babel";
-/*
-
-todo: field editor changes don't persist between openings, however save & close saves the data (reload is fine)
-
-*/
-
 
 /*
 sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
@@ -281,15 +275,16 @@ class ListingItem extends React.Component {
         if (!this.props) return false
         var p = this.props,
             h = p.header,
-            n = p.notes,
+            showNotes = h.get("notes"),
+            notes = p.notes || Immutable.Map(),
             value = p.listing.get(h.get("_id")),
             style = {overflow: "hidden", height: 20, whiteSpace: "nowrap"},
             toggle = !h.get("toggleIcons") ? null : {
                         onClick: _.bind(this.props.toggleIcon, null, p.listing, h.get("_id")),
                         className: "toggleicons"},
-            noteIcon = !h.notes ? null
+            noteIcon = !showNotes ? null
                 : (<i   onClick={_.bind(this.openNoteWriter, this)}
-                        className={"pull-right fa fa-pencil notes " + ["off", "on"][+!!n.size()]}></i>),
+                        className={"pull-right fa fa-pencil notes " + ["off", "on"][+!!notes.size]}></i>),
             bucketColor,
             bucket;
         if (p.canRank && h.get("bucketSize") && h.get("buckets")) {
@@ -301,9 +296,10 @@ class ListingItem extends React.Component {
             <Col md={1} style={style} {...toggle}>
                 {this.formatter(value, p.listing, p.keys, p.header, p.showUK)}
                 {noteIcon}
-                <NoteWriter
-                    close={_.bind(this.closeNoteWriter, this)}
-                    showModal={this.state.showModal}/>
+                {!showNotes ? null
+                    : (<NoteWriter
+                        close={_.bind(this.closeNoteWriter, this)}
+                        showModal={this.state.showModal}/>)}
             </Col>
         )
         // header={this.state.header}
@@ -504,20 +500,16 @@ class App extends React.Component { // props is js array of Immutable objects
             }.bind(this))
     }
     addNewField() {
-        var maxShownId = _.max(this.state.headers, "_id"),
-            maxHiddenId = _.max(this.state.hidden, "_id"),
-            newId = 1 + (maxShownId._id > maxHiddenId._id ? maxShownId._id : maxHiddenId_.id),
-            state = _.clone(this.state),
-            header =  _.extend(_.clone(state.headers[0]), {
+        var newId = (1 + this.state.headers.merge(this.state.hidden).maxBy(h => h.get("_id")).get("_id")),
+            header = this.state.headers.get(0).merge({
                 _id: newId,
                 redfin: "new_" + newId,
                 sequence: newId,
                 show: true,
                 text: "new_" + newId})
 
-        state.headers.push(header)
-        _.each(state.listings, l => l.push(""))
-        this.setState(state)
+        this.setState({headers: this.state.headers.push(header),
+                       listings: this.state.listings.map(l => l.push(""))})
 
         app.retryAjax(JSON.stringify(header), {api: "/savenewfield", type: "post"})
             .done(function(content){
