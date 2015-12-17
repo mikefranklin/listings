@@ -1,6 +1,12 @@
 "use babel";
 
 /*
+
+fix uniques => map
+
+*/
+
+/*
 sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
 the tasting room: 39.415732,-77.410943
 https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
@@ -76,11 +82,6 @@ class Header extends React.Component {
     componentWillReceiveProps(nextProps) {
         this.setState(nextProps)
     }
-    shouldComponentUpdate(nextProps, nextState) {
-        return this.props.headers !== nextProps.headers
-            || this.props.canMove !== nextProps.canMove
-            || this.props.showUK !== nextProps.showUK
-    }
     render() {
         var items = this.props.headers.map(header =>
                 (<HeaderItem
@@ -100,8 +101,8 @@ class HeaderItem extends React.Component {
         super(props)
         this.state = props
     }
-    shouldComponentUpdate(nextProps, nextState) {
-        return this.props !== nextProps || this.state !== nextState
+    componentWillReceiveProps(nextProps) {
+        this.setState(nextProps)
     }
     openFieldEditor() {
         this.setState({showModal: true})
@@ -243,9 +244,9 @@ class ListingItem extends React.Component {
     formatter_url(url) {
         return <a href={url} target="_blank">Redfin</a>
     }
-    formatter_new_35(value, listing, keys, header, apikey, showUK) {
+    formatter_distanceTo(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
-                    + "?saddr=" + listing.get("keys.latitude") + "," + listing.get("keys.longitude")
+                    + "?saddr=" + listing.get(keys.get("latitude")) + "," + listing.get(keys.get("longitude"))
                     + "&daddr=" + header.get("distanceTo") + "&output=embed"
         return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">
                 {showUK && header.get("ukMultiplier") ? Math.floor(value * header.get("ukMultiplier")) : value}
@@ -256,12 +257,14 @@ class ListingItem extends React.Component {
     }
     formatter_address(value, listing, keys, header, apikey, showUK) {
         var url = "https://www.google.com/maps"
-                    + "?q=" + listing.get(keys.latitude) + "," + listing.get("keys.longitude")
+                    + "?q=" + listing.get(keys.get("latitude")) + "," + listing.get(keys.get("longitude"))
                     + "&output=embed";
         return <a href={url} className="fancybox-media fancybox.iframe" target="_blank">{value}</a>
     }
     formatter(value, listing, keys, header, showUK) {
-        return (this["formatter_" + header.get("redfin").replace(/\s/g,"_")]
+        var type = Immutable.List(["distanceTo"]).find(e => header.get(e)) || ""
+        return (this["formatter_" + type]
+                || this["formatter_" + header.get("redfin").replace(/\s/g,"_")]
                 || this["formatter_" + (typeof value)]
                 || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK)
     }
@@ -377,13 +380,15 @@ class App extends React.Component { // props is js array of Immutable objects
                     directionsService: new google.maps.DirectionsService()};
         this.state.listings
             .forEach((l, index) => {
-                headers
-                    .filter(h => !l.get(h.get("_id")))
-                    .forEach(h => opts.map.push(
-                        [index, l.get(0), l.get(lat),l.get(long),
-                         h.get("_id"), h.get("distanceTo"),h.get("redfin")
-                        ]))
-                })
+                if (l.get(lat) && l.get(long)) {
+                    headers
+                        .filter(h => !l.get(h.get("_id")))
+                        .forEach(h => opts.map.push(
+                            [index, l.get(0), l.get(lat),l.get(long),
+                             h.get("_id"), h.get("distanceTo"),h.get("redfin")
+                            ]))
+                }
+            })
         return opts
     }
     updateDistances(opts) {
@@ -398,6 +403,7 @@ class App extends React.Component { // props is js array of Immutable objects
         if (!opts.map.length) return
 
         [index, listing_id, lat, long, id, distanceTo, headerName] = opts.map.pop()
+
         request = {travelMode: google.maps.TravelMode.WALKING,
                     origin: lat + "," + long, destination: distanceTo}
 
@@ -505,9 +511,11 @@ class App extends React.Component { // props is js array of Immutable objects
                 _id: newId,
                 redfin: "new_" + newId,
                 sequence: newId,
+                buckets: {},
+                bucketSize: null,
+                bucketMultiplier: null,
                 show: true,
                 text: "new_" + newId})
-
         this.setState({headers: this.state.headers.push(header),
                        listings: this.state.listings.map(l => l.push(""))})
 
@@ -623,10 +631,6 @@ class FieldEditor extends React.Component {
         super(props)
         this.state = props
     }
-    shouldComponentUpdate(nextProps, nextState) {
-        return this.props.showModal != nextProps.showModal ||
-                this.props.header !== nextProps.header
-    }
     componentWillReceiveProps(nextProps) {
         this.setState(nextProps)
     }
@@ -644,22 +648,23 @@ class FieldEditor extends React.Component {
         this.props.setState({header: this.state.header.set("buckets", Immutable.fromJS(buckets))})
     }
     updateBuckets(bucket, event) {
-        var buckets = this.state.header.get("buckets").set(bucket, Immutable.List([event.target.value, ""])),
+        var buckets = this.state.header.get("buckets").set(String(bucket), Immutable.List([event.target.value, ""])),
             min = !buckets.size ? 0 : buckets.minBy(wc => +wc.get(0)).get(0),
             max = !buckets.size ? 0 : buckets.maxBy(wc => +wc.get(0)).get(0),
             mult = !max ? 0 : (app.colors.length - 2) / (max - min);
-
         buckets = buckets.map(wc => {
             var color = wc.get(0) == min ? app.colors[0] :
                 wc.get(0) && wc.get(0) == max ? app.colors[app.colors.length - 1]
                     : app.colors[Math.floor((wc.get(0) - min + 1) * mult)]
-            console.log(wc.set(1, color).toJS())
             return wc.set(1, color)
         })
         this.setState({header: this.state.header.set("buckets", buckets)})
     }
     showType(type) {
         this.setState({showType: type})
+    }
+    close() {
+        this.props.close(this.state.header, this.state.showTypes == "notes")
     }
     render() {
         var header = this.state.header,
@@ -700,7 +705,7 @@ class FieldEditor extends React.Component {
                     </Grid>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button onClick={_.bind(this.props.close, this, this.state.header, this.state.showType=="notes")}>
+                    <Button onClick={_.bind(this.close, this)}>
                         Save & Close
                     </Button>
                     <Button onClick={_.bind(this.props.close, this, null)}>Close</Button>

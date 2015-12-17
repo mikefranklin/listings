@@ -2,6 +2,12 @@
 "use babel"
 
 /*
+
+fix uniques => map
+
+*/
+
+/*
 sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
 the tasting room: 39.415732,-77.410943
 https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
@@ -119,11 +125,6 @@ var Header = (function (_React$Component) {
             this.setState(nextProps);
         }
     }, {
-        key: "shouldComponentUpdate",
-        value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props.headers !== nextProps.headers || this.props.canMove !== nextProps.canMove || this.props.showUK !== nextProps.showUK;
-        }
-    }, {
         key: "render",
         value: function render() {
             var _this2 = this;
@@ -162,9 +163,9 @@ var HeaderItem = (function (_React$Component2) {
     }
 
     _createClass(HeaderItem, [{
-        key: "shouldComponentUpdate",
-        value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props !== nextProps || this.state !== nextState;
+        key: "componentWillReceiveProps",
+        value: function componentWillReceiveProps(nextProps) {
+            this.setState(nextProps);
         }
     }, {
         key: "openFieldEditor",
@@ -413,9 +414,9 @@ var ListingItem = (function (_React$Component5) {
             );
         }
     }, {
-        key: "formatter_new_35",
-        value: function formatter_new_35(value, listing, keys, header, apikey, showUK) {
-            var url = "https://www.google.com/maps" + "?saddr=" + listing.get("keys.latitude") + "," + listing.get("keys.longitude") + "&daddr=" + header.get("distanceTo") + "&output=embed";
+        key: "formatter_distanceTo",
+        value: function formatter_distanceTo(value, listing, keys, header, apikey, showUK) {
+            var url = "https://www.google.com/maps" + "?saddr=" + listing.get(keys.get("latitude")) + "," + listing.get(keys.get("longitude")) + "&daddr=" + header.get("distanceTo") + "&output=embed";
             return React.createElement(
                 "a",
                 { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
@@ -430,7 +431,7 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "formatter_address",
         value: function formatter_address(value, listing, keys, header, apikey, showUK) {
-            var url = "https://www.google.com/maps" + "?q=" + listing.get(keys.latitude) + "," + listing.get("keys.longitude") + "&output=embed";
+            var url = "https://www.google.com/maps" + "?q=" + listing.get(keys.get("latitude")) + "," + listing.get(keys.get("longitude")) + "&output=embed";
             return React.createElement(
                 "a",
                 { href: url, className: "fancybox-media fancybox.iframe", target: "_blank" },
@@ -440,7 +441,10 @@ var ListingItem = (function (_React$Component5) {
     }, {
         key: "formatter",
         value: function formatter(value, listing, keys, header, showUK) {
-            return (this["formatter_" + header.get("redfin").replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK);
+            var type = Immutable.List(["distanceTo"]).find(function (e) {
+                return header.get(e);
+            }) || "";
+            return (this["formatter_" + type] || this["formatter_" + header.get("redfin").replace(/\s/g, "_")] || this["formatter_" + (typeof value === "undefined" ? "undefined" : _typeof(value))] || this.formatter_undef)(value, listing, keys, header, this.props.api, showUK);
         }
     }, {
         key: "openNoteWriter",
@@ -599,11 +603,13 @@ var App = (function (_React$Component6) {
                 wait: 1000,
                 directionsService: new google.maps.DirectionsService() };
             this.state.listings.forEach(function (l, index) {
-                headers.filter(function (h) {
-                    return !l.get(h.get("_id"));
-                }).forEach(function (h) {
-                    return opts.map.push([index, l.get(0), l.get(lat), l.get(long), h.get("_id"), h.get("distanceTo"), h.get("redfin")]);
-                });
+                if (l.get(lat) && l.get(long)) {
+                    headers.filter(function (h) {
+                        return !l.get(h.get("_id"));
+                    }).forEach(function (h) {
+                        return opts.map.push([index, l.get(0), l.get(lat), l.get(long), h.get("_id"), h.get("distanceTo"), h.get("redfin")]);
+                    });
+                }
             });
             return opts;
         }
@@ -785,9 +791,11 @@ var App = (function (_React$Component6) {
                 _id: newId,
                 redfin: "new_" + newId,
                 sequence: newId,
+                buckets: {},
+                bucketSize: null,
+                bucketMultiplier: null,
                 show: true,
                 text: "new_" + newId });
-
             this.setState({ headers: this.state.headers.push(header),
                 listings: this.state.listings.map(function (l) {
                     return l.push("");
@@ -975,11 +983,6 @@ var FieldEditor = (function (_React$Component8) {
     }
 
     _createClass(FieldEditor, [{
-        key: "shouldComponentUpdate",
-        value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props.showModal != nextProps.showModal || this.props.header !== nextProps.header;
-        }
-    }, {
         key: "componentWillReceiveProps",
         value: function componentWillReceiveProps(nextProps) {
             this.setState(nextProps);
@@ -1006,7 +1009,7 @@ var FieldEditor = (function (_React$Component8) {
     }, {
         key: "updateBuckets",
         value: function updateBuckets(bucket, event) {
-            var buckets = this.state.header.get("buckets").set(bucket, Immutable.List([event.target.value, ""])),
+            var buckets = this.state.header.get("buckets").set(String(bucket), Immutable.List([event.target.value, ""])),
                 min = !buckets.size ? 0 : buckets.minBy(function (wc) {
                 return +wc.get(0);
             }).get(0),
@@ -1014,10 +1017,8 @@ var FieldEditor = (function (_React$Component8) {
                 return +wc.get(0);
             }).get(0),
                 mult = !max ? 0 : (app.colors.length - 2) / (max - min);
-
             buckets = buckets.map(function (wc) {
                 var color = wc.get(0) == min ? app.colors[0] : wc.get(0) && wc.get(0) == max ? app.colors[app.colors.length - 1] : app.colors[Math.floor((wc.get(0) - min + 1) * mult)];
-                console.log(wc.set(1, color).toJS());
                 return wc.set(1, color);
             });
             this.setState({ header: this.state.header.set("buckets", buckets) });
@@ -1026,6 +1027,11 @@ var FieldEditor = (function (_React$Component8) {
         key: "showType",
         value: function showType(type) {
             this.setState({ showType: type });
+        }
+    }, {
+        key: "close",
+        value: function close() {
+            this.props.close(this.state.header, this.state.showTypes == "notes");
         }
     }, {
         key: "render",
@@ -1089,7 +1095,7 @@ var FieldEditor = (function (_React$Component8) {
                     null,
                     React.createElement(
                         Button,
-                        { onClick: _.bind(this.props.close, this, this.state.header, this.state.showType == "notes") },
+                        { onClick: _.bind(this.close, this) },
                         "Save & Close"
                     ),
                     React.createElement(
