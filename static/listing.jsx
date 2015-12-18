@@ -318,10 +318,11 @@ class App extends React.Component { // props is js array of Immutable objects
             dtRef = [keys.last_loaded, "$date"],
             showable = props.headers.groupBy(h => h.get("show")),
             listings = this.updateMath(props),
-            uniques = props.headers
+            uniques = Immutable.Map(props.headers // faster to convert the end result than use intermediate Set()
                 .filter(h => h.get("show"))
-                .map(h => listings.reduce( (set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))
-                .map( (entry, key) => Immutable.Map(entry).keySeq()); // map rather than in reduce(), to avoid slowness/∞ loop
+                .map(h => [h.get("_id"),
+                            Immutable.Map(listings.reduce((set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))]
+                ))
 
         this.state = {  maxDate: listings.maxBy(l => l.getIn(dtRef)).getIn(dtRef),
                         headers: showable.get(true),
@@ -640,8 +641,8 @@ class FieldEditor extends React.Component {
         if (/^bucket/.test(name)) this.props.setState({header: this.state.header.set(name, value), updateRanking: true})
         else this.props.setState({header: this.state.header.set(name, value)})
         if (name != "bucketSize") return
-        if (value == "*") this.props.uniques.map(v => buckets[v] = [0, ""])
-        else if (value != "") this.props.uniques
+        if (value == "*") this.props.uniques.keySeq().map(v => buckets[v] = [0, ""])
+        else if (value != "") this.props.uniques.keySeq()
                                     .map(v => Math.floor(v / value)).toSet() // make unique
                                     .map(v => v * value).sort()
                                     .forEach(v => buckets[v] = [0, ""])
@@ -664,6 +665,7 @@ class FieldEditor extends React.Component {
         this.setState({showType: type})
     }
     close() {
+        console.log("FE/Close", this.state.header.toJS());
         this.props.close(this.state.header, this.state.showTypes == "notes")
     }
     render() {

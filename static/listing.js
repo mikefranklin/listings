@@ -513,15 +513,14 @@ var App = (function (_React$Component6) {
             return h.get("show");
         }),
             listings = _this9.updateMath(props),
-            uniques = props.headers.filter(function (h) {
+            uniques = Immutable.Map(props.headers // faster to convert the end result than use intermediate Set()
+        .filter(function (h) {
             return h.get("show");
         }).map(function (h) {
-            return listings.reduce(function (set, l) {
+            return [h.get("_id"), Immutable.Map(listings.reduce(function (set, l) {
                 set[l.get(h.get("_id"))] = true;return set;
-            }, {});
-        }).map(function (entry, key) {
-            return Immutable.Map(entry).keySeq();
-        }); // map rather than in reduce(), to avoid slowness/∞ loop
+            }, {}))];
+        }));
 
         _this9.state = { maxDate: listings.maxBy(function (l) {
                 return l.getIn(dtRef);
@@ -994,9 +993,9 @@ var FieldEditor = (function (_React$Component8) {
                 value = event.target.value;
             if (/^bucket/.test(name)) this.props.setState({ header: this.state.header.set(name, value), updateRanking: true });else this.props.setState({ header: this.state.header.set(name, value) });
             if (name != "bucketSize") return;
-            if (value == "*") this.props.uniques.map(function (v) {
+            if (value == "*") this.props.uniques.keySeq().map(function (v) {
                 return buckets[v] = [0, ""];
-            });else if (value != "") this.props.uniques.map(function (v) {
+            });else if (value != "") this.props.uniques.keySeq().map(function (v) {
                 return Math.floor(v / value);
             }).toSet() // make unique
             .map(function (v) {
@@ -1031,6 +1030,7 @@ var FieldEditor = (function (_React$Component8) {
     }, {
         key: "close",
         value: function close() {
+            console.log("FE/Close", this.state.header.toJS());
             this.props.close(this.state.header, this.state.showTypes == "notes");
         }
     }, {
