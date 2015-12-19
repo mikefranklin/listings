@@ -1,19 +1,11 @@
 "use strict";
-"use babel"
+"use babel";
 
 /*
 
-fix uniques => map
+fix: FE updates save + appear on reload; do appear on FE re-opening after edit.
 
 */
-
-/*
-sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
-the tasting room: 39.415732,-77.410943
-https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
-*/
-
-;
 
 var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
 
@@ -336,7 +328,7 @@ var Listing = (function (_React$Component4) {
     _createClass(Listing, [{
         key: "shouldComponentUpdate",
         value: function shouldComponentUpdate(nextProps, nextState) {
-            return this.props.canRank != nextProps.canRank || this.props.showUK != nextProps.showUK || this.props.listing !== nextProps.listing || this.props.headers !== nextProps.headers;
+            return this.props !== nextProps;
         }
     }, {
         key: "render",
@@ -529,7 +521,9 @@ var App = (function (_React$Component6) {
             hidden: showable.get(false),
             currentActivesOnly: true,
             notes: _this9.props.notes, // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
-            allListings: listings,
+            allListings: Immutable.Map(listings.map(function (l) {
+                return [l.get(0), l];
+            })), // map by id
             apikey: props.api,
             uniques: uniques, // unique values by field
             canMove: false,
@@ -574,7 +568,7 @@ var App = (function (_React$Component6) {
                 return !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate && l.get(s.keys.status).toLowerCase() == "active";
             }).sortBy(function (l) {
                 return fn(l, headers);
-            });
+            }).toList();
         }
     }, {
         key: "toggleRank",
@@ -649,7 +643,10 @@ var App = (function (_React$Component6) {
                     console.log("error getting directions for", request, e);
                     duration = 0;
                 }
-                _this10.setState({ listings: _this10.state.listings.setIn([index, id], duration) });
+                _this10.setState({
+                    listings: _this10.state.listings.setIn([index, id], duration),
+                    allListings: _this10.state.allListings.setIn([listing_id, id], duration)
+                });
                 _this10.updateListingDB(listing_id, headerName, duration);
             });
 
@@ -760,6 +757,10 @@ var App = (function (_React$Component6) {
     }, {
         key: "saveHeader",
         value: function saveHeader(header, updateRanking) {
+            var index = this.state.headers.findIndex(function (h) {
+                return h.get("_id") == header.get("_id");
+            });
+            this.setState({ headers: this.state.headers.set(index, header) });
             app.retryAjax(JSON.stringify(header), { api: "/saveheader", type: "post" }).done((function (content) {
                 console.log("saving header worked!", header, arguments);
                 if (updateRanking && this.state.canRank) this.toggleRank(true);
@@ -798,7 +799,11 @@ var App = (function (_React$Component6) {
             this.setState({ headers: this.state.headers.push(header),
                 listings: this.state.listings.map(function (l) {
                     return l.push("");
-                }) });
+                }),
+                allListings: this.state.allListings.map(function (l) {
+                    return l.push("");
+                })
+            });
 
             app.retryAjax(JSON.stringify(header), { api: "/savenewfield", type: "post" }).done((function (content) {
                 console.log("added new field!", arguments);
@@ -819,7 +824,10 @@ var App = (function (_React$Component6) {
                 return l.get(0) == listing.get(0);
             });
 
-            this.setState({ listings: this.state.listings.setIn([pos, hId], icon) });
+            this.setState({
+                listings: this.state.listings.setIn([pos, hId], icon),
+                allListings: this.state.allListings.setIn([listing.get(0), hId], icon)
+            });
             this.updateListingDB(listing.get(0), header.get("redfin"), icon);
         }
     }, {

@@ -2,14 +2,8 @@
 
 /*
 
-fix uniques => map
+fix: FE updates save + appear on reload; do appear on FE re-opening after edit.
 
-*/
-
-/*
-sq ft math: String(1000+Math.floor(list price/sq ft)).substr(1)
-the tasting room: 39.415732,-77.410943
-https://www.google.com/maps/dir/39.415674,-77.410997/39.429216,-77.421175
 */
 
 class ListingApp {
@@ -199,10 +193,7 @@ class Control extends React.Component {
 
 class Listing extends React.Component {
     shouldComponentUpdate(nextProps, nextState) {
-        return this.props.canRank != nextProps.canRank
-                || this.props.showUK != nextProps.showUK
-                || this.props.listing !== nextProps.listing
-                || this.props.headers !== nextProps.headers
+        return this.props !== nextProps
     }
     render() {
         if (!this.props) return false
@@ -329,7 +320,7 @@ class App extends React.Component { // props is js array of Immutable objects
                         hidden: showable.get(false),
                         currentActivesOnly: true,
                         notes: this.props.notes, // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
-                        allListings: listings,
+                        allListings: Immutable.Map(listings.map(l => [l.get(0), l])), // map by id
                         apikey: props.api,
                         uniques: uniques, // unique values by field
                         canMove: false,
@@ -362,6 +353,7 @@ class App extends React.Component { // props is js array of Immutable objects
                 .filter(l => !s.currentActivesOnly || l.getIn(s.dtRef) == s.maxDate
                                 && l.get(s.keys.status).toLowerCase() == "active")
                 .sortBy(l => fn(l, headers))
+                .toList()
     }
     toggleRank(force) { // 1st param may be (ignored) mouse event or boolean
         var isForce = typeof force == "boolean" && force,
@@ -415,7 +407,10 @@ class App extends React.Component { // props is js array of Immutable objects
                 console.log("error getting directions for", request, e)
                 duration=0
             }
-            this.setState({listings: this.state.listings.setIn([index, id], duration)})
+            this.setState({
+                listings: this.state.listings.setIn([index, id], duration),
+                allListings: this.state.allListings.setIn([listing_id, id], duration)
+            })
             this.updateListingDB(listing_id, headerName, duration)
         })
 
@@ -485,6 +480,8 @@ class App extends React.Component { // props is js array of Immutable objects
         this.saveHeaderValue(state.headers, "sequence")
     }
     saveHeader(header, updateRanking) {
+        var index = this.state.headers.findIndex(h => h.get("_id") == header.get("_id"))
+        this.setState({headers: this.state.headers.set(index, header)})
         app.retryAjax(JSON.stringify(header), {api: "/saveheader", type: "post"})
             .done(function(content) {
                 console.log("saving header worked!", header, arguments)
@@ -518,7 +515,9 @@ class App extends React.Component { // props is js array of Immutable objects
                 show: true,
                 text: "new_" + newId})
         this.setState({headers: this.state.headers.push(header),
-                       listings: this.state.listings.map(l => l.push(""))})
+                       listings: this.state.listings.map(l => l.push("")),
+                       allListings: this.state.allListings.map(l => l.push(""))
+                    })
 
         app.retryAjax(JSON.stringify(header), {api: "/savenewfield", type: "post"})
             .done(function(content){
@@ -535,7 +534,10 @@ class App extends React.Component { // props is js array of Immutable objects
             icon = icons[value == "" ? 0 : (_.indexOf(icons, value) + 1) % icons.length],
             pos = this.state.listings.findIndex(l => l.get(0) == listing.get(0));
 
-        this.setState({listings: this.state.listings.setIn([pos, hId], icon)})
+        this.setState({
+            listings: this.state.listings.setIn([pos, hId], icon),
+            allListings: this.state.allListings.setIn([listing.get(0), hId], icon)
+        })
         this.updateListingDB(listing.get(0), header.get("redfin"), icon)
     }
     render() {
