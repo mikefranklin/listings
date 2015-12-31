@@ -1,11 +1,5 @@
 "use babel";
 
-/*
-
-fix: FE updates save + appear on reload; do appear on FE re-opening after edit.
-
-*/
-
 class ListingApp {
     constructor() {
         _.each("Grid,Row,Col,Modal,ButtonGroup,Button,Overlay,DropdownButton,MenuItem,Navbar,Nav,NavItem,NavDropdown".split(","),
