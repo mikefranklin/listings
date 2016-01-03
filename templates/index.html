@@ -11,6 +11,11 @@
   <script src="{{ url_for('static', filename='bower_components/js-signals/dist/signals.min.js') }}"></script>
   <script src="{{ url_for('static', filename='bower_components/fancybox/source/jquery.fancybox.pack.js') }}"></script>
   <script src="{{ url_for('static', filename='bower_components/immutable/dist/immutable.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/control.js')}}"></script>
+  <script src="{{ url_for('static', filename='js/fieldEditor.js')}}"></script>
+  <script src="{{ url_for('static', filename='js/header.js')}}"></script>
+  <script src="{{ url_for('static', filename='js/listings.js')}}"></script>
+  <script src="{{ url_for('static', filename='js/store.js')}}"></script>
 
   <link href="{{ url_for('static', filename='bower_components/bootstrap/dist/css/bootstrap.min.css') }}" rel="stylesheet" type="text/css">
   <link href="{{ url_for('static', filename='bower_components/font-awesome/css/font-awesome.min.css') }}" rel="stylesheet" type="text/css">
@@ -20,6 +25,11 @@
 </head>
 <body>
   <div id="content"></div>
-  <script src="{{ url_for('static', filename='listing.js') }}"></script>
-
+  <script>
+    var app;
+    _.defer(function() {
+      app = new App()
+      app.display()
+    })
+  </script>
 </body>

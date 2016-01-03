@@ -2,6 +2,22 @@ BODY {
   margin-top: 50px;
 }
 
+.rank0, .rank1, .rank2, .rank3, .rank4, .rank5, .rank6, .rank7, .rank8, .rank9 {
+  background-color: inherit;
+}
+
+.rank .rank0 {background-color: #CBEAF6}
+.rank .rank1 {background-color: #B9E3F3}
+.rank .rank2 {background-color: #A8DCF0}
+.rank .rank3 {background-color: #96D5ED}
+.rank .rank4 {background-color: #87CEEB}
+.rank .rank5 {background-color: #73C7E7}
+.rank .rank6 {background-color: #62BFE4}
+.rank .rank7 {background-color: #51B8E1}
+.rank .rank8 {background-color: #3FB1DE}
+.rank .rank9 {background-color: #2EAADC}
+
+
 ul.nav li:hover {
   text-decoration: underline;
   color: blue
