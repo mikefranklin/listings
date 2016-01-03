@@ -12,20 +12,22 @@ class App {
         this.on = {}
         this.store = Immutable.Map()
         var list = Immutable.List(`
-            headersSorted           # when user rearranges headers
             headersUpdated          # after content is updated
-            listingsUpdated         # after listings change
+            canRankClicked:toggleCanRank
+            rankUpdated
             `.split("\n"))
                 .filter(e => e)
                 .map(e => e.split("#")[0].replace(/\s/g, "").split(":")) // signal:function
         list.forEach(pair => this.on[pair[0]] = new signals.Signal())
+        list.filter(pair => pair[1])
+            .forEach(pair => this.on[pair[0]].add(this[pair[1]].bind(this)))
     }
     display() {
         ReactDOM.render((
             <Grid fluid={true}>
-                <Control />
-                <Header />
-                <Listings />
+                <Control/>
+                <Header/>
+                <Listings/>
             </Grid>),
             document.getElementById("content"),
             this.loadData.bind(this))
@@ -41,14 +43,29 @@ class App {
                 console.log(arguments)
             }.bind(this))
     }
+    toggleCanRank() {
+        var newRank = !this.store.get("canRank")
+        this.store = this.store.set("canRank", newRank)
+        this.on.rankUpdated.dispatch(newRank)
+    }
     processRawData(data) {
-        var headers = Immutable.fromJS(data.headers).groupBy(h => h.get("show"))
-        this.store = this.store.set("vheaders", headers.get(true))
-        this.store = this.store.set("hheaders", headers.get(false))
-        this.store = this.store.set("keys", Immutable.Map(data.keys))
-        this.store = this.store.set("listings", Immutable.fromJS(data.listings))
-        this.store = this.store.set("vlistings", this.getDisplableListingData())
-        this.on.headersUpdated.dispatch(this.store.get("vheaders"), this.store.get("hheaders"))
+        var headers = Immutable.fromJS(data.headers).groupBy(h => h.get("show")),
+            canRank = true;
+
+        this.listings = Immutable.fromJS(data.listings)
+        this.keys = Object.assign({}, data.keys)
+        this.dtRef = [data.keys.last_loaded, "$date"]
+        this.maxDate = this.listings.maxBy(l => l.getIn(this.dtRef)).getIn(this.dtRef)
+
+        this.store = this.store.set("vheaders", headers.get(true).sortBy(h => h.get("sequence")))
+                        .set("hheaders", headers.get(false).sortBy(h => h.get("text")))
+                        .set("canRank", canRank)
+                        .set("currentActivesOnly", true)
+                        .set("showUk", false)
+        this.store = this.store.set("listings", this.getDisplableListingData())
+        this.store = this.store.set("rankings", this.getRankingInfo())
+
+        this.on.headersUpdated.dispatch(this.store, this.keys)
     }
     retryAjax(params, options) {
         var opts = _.extend({base: "", api: "*required*", dataType: "json",
@@ -70,12 +87,41 @@ class App {
         }())
         return def.promise()
     } // function retryAjax
+
+    getRankingInfo() {
+        var sortVal = value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value,
+            alphaSort = l => l.take(6).reduce((s, v) => s + "$" + sortVal(v), ""),
+            headers = this.store.get("vheaders")
+                            .map(h => {
+                                var buckets = (h.get("buckets") || Immutable.List()).map(wc => wc.get(0)),
+                                    min = buckets.min(),
+                                    max = buckets.max(),
+                                    mult = !max ? 0 : 8 / (max - min);
+                                return [min, max, mult, buckets.toJS(), h.get("bucketSize"),
+                                    parseInt(h.get("bucketMultiplier") || 1)]
+                            })
+                            .toList()
+        return this.store.get("listings").map(l => l.data.reduce((r, item, index) => {
+                var [min, max, mult, buckets, size, multiplier] = headers.get(index)
+                if (!size) return r
+                var bucket = Math.floor(item / size) * size,
+                    weight = parseInt(buckets[bucket] || 0),
+                    scaled = weight == min ? 0 : weight && weight == max ? 9
+                                : Math.floor((weight - min + 1) * mult)
+                r[1] = r[1] - (weight * multiplier)
+                r[2][index] = scaled
+                return r
+        }, [alphaSort(l.data), 0, []]) // rank score + [0-9, ...] for each field
+        )
+    }
     getDisplableListingData() {
         var indices = this.store.get("vheaders")
                             .sortBy(h => h.get("sequence"))
                             .map(h => h.get("_id"))
-                            .toJS();
-        return this.store.get("listings").map(l => indices.map(index => l.get(index))) // do formatting here.
+        return this.listings
+                    .filter(l => !this.store.get("currentActivesOnly") || (l.getIn(this.dtRef) == this.maxDate
+                                    && l.get(this.keys.status).toLowerCase() == "active"))
+                    .map(l => ({key: l.get(0), data: indices.map(index => l.get(index))}))
     }
 }
 
@@ -131,12 +177,6 @@ class AppX extends React.Component { // props is js array of Immutable objects
                                 && l.get(s.keys.status).toLowerCase() == "active")
                 .sortBy(l => fn(l, headers))
                 .toList()
-    }
-    toggleRank(force) { // 1st param may be (ignored) mouse event or boolean
-        var isForce = typeof force == "boolean" && force,
-            state = !isForce ? {canRank: !this.state.canRank} : {};
-        state.listings = this.getSortedVisibleListings(this.state, isForce || state.canRank)
-        this.setState(state)
     }
     toggleUK() {
         this.setState({showUK: !this.state.showUK})

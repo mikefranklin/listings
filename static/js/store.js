@@ -32,13 +32,18 @@ var App = (function () {
         }); // pollute global namespace for convenience
         this.on = {};
         this.store = Immutable.Map();
-        var list = Immutable.List("\n            headersSorted           # when user rearranges headers\n            headersUpdated          # after content is updated\n            listingsUpdated         # after listings change\n            ".split("\n")).filter(function (e) {
+        var list = Immutable.List("\n            headersUpdated          # after content is updated\n            canRankClicked:toggleCanRank\n            rankUpdated\n            ".split("\n")).filter(function (e) {
             return e;
         }).map(function (e) {
             return e.split("#")[0].replace(/\s/g, "").split(":");
         }); // signal:function
         list.forEach(function (pair) {
             return _this.on[pair[0]] = new signals.Signal();
+        });
+        list.filter(function (pair) {
+            return pair[1];
+        }).forEach(function (pair) {
+            return _this.on[pair[0]].add(_this[pair[1]].bind(_this));
         });
     }
 
@@ -66,17 +71,38 @@ var App = (function () {
             }).bind(this));
         }
     }, {
+        key: "toggleCanRank",
+        value: function toggleCanRank() {
+            var newRank = !this.store.get("canRank");
+            this.store = this.store.set("canRank", newRank);
+            this.on.rankUpdated.dispatch(newRank);
+        }
+    }, {
         key: "processRawData",
         value: function processRawData(data) {
+            var _this2 = this;
+
             var headers = Immutable.fromJS(data.headers).groupBy(function (h) {
                 return h.get("show");
-            });
-            this.store = this.store.set("vheaders", headers.get(true));
-            this.store = this.store.set("hheaders", headers.get(false));
-            this.store = this.store.set("keys", Immutable.Map(data.keys));
-            this.store = this.store.set("listings", Immutable.fromJS(data.listings));
-            this.store = this.store.set("vlistings", this.getDisplableListingData());
-            this.on.headersUpdated.dispatch(this.store.get("vheaders"), this.store.get("hheaders"));
+            }),
+                canRank = true;
+
+            this.listings = Immutable.fromJS(data.listings);
+            this.keys = Object.assign({}, data.keys);
+            this.dtRef = [data.keys.last_loaded, "$date"];
+            this.maxDate = this.listings.maxBy(function (l) {
+                return l.getIn(_this2.dtRef);
+            }).getIn(this.dtRef);
+
+            this.store = this.store.set("vheaders", headers.get(true).sortBy(function (h) {
+                return h.get("sequence");
+            })).set("hheaders", headers.get(false).sortBy(function (h) {
+                return h.get("text");
+            })).set("canRank", canRank).set("currentActivesOnly", true).set("showUk", false);
+            this.store = this.store.set("listings", this.getDisplableListingData());
+            this.store = this.store.set("rankings", this.getRankingInfo());
+
+            this.on.headersUpdated.dispatch(this.store, this.keys);
         }
     }, {
         key: "retryAjax",
@@ -102,18 +128,67 @@ var App = (function () {
         } // function retryAjax
 
     }, {
+        key: "getRankingInfo",
+        value: function getRankingInfo() {
+            var sortVal = function sortVal(value) {
+                return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
+                );
+            },
+                alphaSort = function alphaSort(l) {
+                return l.take(6).reduce(function (s, v) {
+                    return s + "$" + sortVal(v);
+                }, "");
+            },
+                headers = this.store.get("vheaders").map(function (h) {
+                var buckets = (h.get("buckets") || Immutable.List()).map(function (wc) {
+                    return wc.get(0);
+                }),
+                    min = buckets.min(),
+                    max = buckets.max(),
+                    mult = !max ? 0 : 8 / (max - min);
+                return [min, max, mult, buckets.toJS(), h.get("bucketSize"), parseInt(h.get("bucketMultiplier") || 1)];
+            }).toList();
+            return this.store.get("listings").map(function (l) {
+                return l.data.reduce(function (r, item, index) {
+                    var _headers$get = headers.get(index);
+
+                    var _headers$get2 = _slicedToArray(_headers$get, 6);
+
+                    var min = _headers$get2[0];
+                    var max = _headers$get2[1];
+                    var mult = _headers$get2[2];
+                    var buckets = _headers$get2[3];
+                    var size = _headers$get2[4];
+                    var multiplier = _headers$get2[5];
+
+                    if (!size) return r;
+                    var bucket = Math.floor(item / size) * size,
+                        weight = parseInt(buckets[bucket] || 0),
+                        scaled = weight == min ? 0 : weight && weight == max ? 9 : Math.floor((weight - min + 1) * mult);
+                    r[1] = r[1] - weight * multiplier;
+                    r[2][index] = scaled;
+                    return r;
+                }, [alphaSort(l.data), 0, []]);
+            } // rank score + [0-9, ...] for each field
+            );
+        }
+    }, {
         key: "getDisplableListingData",
         value: function getDisplableListingData() {
+            var _this3 = this;
+
             var indices = this.store.get("vheaders").sortBy(function (h) {
                 return h.get("sequence");
             }).map(function (h) {
                 return h.get("_id");
-            }).toJS();
-            return this.store.get("listings").map(function (l) {
-                return indices.map(function (index) {
-                    return l.get(index);
-                });
-            }); // do formatting here.
+            });
+            return this.listings.filter(function (l) {
+                return !_this3.store.get("currentActivesOnly") || l.getIn(_this3.dtRef) == _this3.maxDate && l.get(_this3.keys.status).toLowerCase() == "active";
+            }).map(function (l) {
+                return { key: l.get(0), data: indices.map(function (index) {
+                        return l.get(index);
+                    }) };
+            });
         }
     }]);
 
@@ -128,7 +203,7 @@ var AppX = (function (_React$Component) {
     function AppX(props) {
         _classCallCheck(this, AppX);
 
-        var _this2 = _possibleConstructorReturn(this, Object.getPrototypeOf(AppX).call(this, props));
+        var _this4 = _possibleConstructorReturn(this, Object.getPrototypeOf(AppX).call(this, props));
 
         var keys = props.keys.toJS(),
             // no need for them to be immutable
@@ -136,7 +211,7 @@ var AppX = (function (_React$Component) {
             showable = props.headers.groupBy(function (h) {
             return h.get("show");
         }),
-            listings = _this2.updateMath(props),
+            listings = _this4.updateMath(props),
             uniques = Immutable.Map(props.headers // faster to convert the end result than use intermediate Set()
         .filter(function (h) {
             return h.get("show");
@@ -146,13 +221,13 @@ var AppX = (function (_React$Component) {
             }, {}))];
         }));
 
-        _this2.state = { maxDate: listings.maxBy(function (l) {
+        _this4.state = { maxDate: listings.maxBy(function (l) {
                 return l.getIn(dtRef);
             }).getIn(dtRef),
             headers: showable.get(true),
             hidden: showable.get(false),
             currentActivesOnly: true,
-            notes: _this2.props.notes, // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
+            notes: _this4.props.notes, // [listing_id][redfin] = [{dt: xx, text: xx, …}, …]
             allListings: Immutable.Map(listings.map(function (l) {
                 return [l.get(0), l];
             })), // map by id
@@ -164,10 +239,10 @@ var AppX = (function (_React$Component) {
             dtRef: dtRef,
             keys: keys };
 
-        _this2.state.listings = _this2.getSortedVisibleListings(_this2.state, false);
-        app.signaller.headersSorted.add(_.bind(_this2.reorderHeaders, _this2));
-        _this2.updateDistances();
-        return _this2;
+        _this4.state.listings = _this4.getSortedVisibleListings(_this4.state, false);
+        app.signaller.headersSorted.add(_.bind(_this4.reorderHeaders, _this4));
+        _this4.updateDistances();
+        return _this4;
     }
 
     _createClass(AppX, [{
@@ -203,15 +278,6 @@ var AppX = (function (_React$Component) {
             }).toList();
         }
     }, {
-        key: "toggleRank",
-        value: function toggleRank(force) {
-            // 1st param may be (ignored) mouse event or boolean
-            var isForce = typeof force == "boolean" && force,
-                state = !isForce ? { canRank: !this.state.canRank } : {};
-            state.listings = this.getSortedVisibleListings(this.state, isForce || state.canRank);
-            this.setState(state);
-        }
-    }, {
         key: "toggleUK",
         value: function toggleUK() {
             this.setState({ showUK: !this.state.showUK });
@@ -241,7 +307,7 @@ var AppX = (function (_React$Component) {
     }, {
         key: "updateDistances",
         value: function updateDistances(opts) {
-            var _this3 = this;
+            var _this5 = this;
 
             var index, listing_id, lat, long, id, distanceTo, headerName, request, duration;
             if ((typeof google === "undefined" ? "undefined" : _typeof(google)) != "object") {
@@ -275,11 +341,11 @@ var AppX = (function (_React$Component) {
                     console.log("error getting directions for", request, e);
                     duration = 0;
                 }
-                _this3.setState({
-                    listings: _this3.state.listings.setIn([index, id], duration),
-                    allListings: _this3.state.allListings.setIn([listing_id, id], duration)
+                _this5.setState({
+                    listings: _this5.state.listings.setIn([index, id], duration),
+                    allListings: _this5.state.allListings.setIn([listing_id, id], duration)
                 });
-                _this3.updateListingDB(listing_id, headerName, duration);
+                _this5.updateListingDB(listing_id, headerName, duration);
             });
 
             _.delay(_.bind(this.updateDistances, this), opts.wait, opts);
@@ -465,19 +531,19 @@ var AppX = (function (_React$Component) {
     }, {
         key: "render",
         value: function render() {
-            var _this4 = this;
+            var _this6 = this;
 
             // in listing:                     notes={this.state.notes[listing[0]]}
             var listings = this.state.listings.map(function (listing) {
                 return React.createElement(Listing, {
-                    toggleIcon: _.bind(_this4.toggleIcon, _this4),
-                    canRank: _this4.state.canRank,
-                    showUK: _this4.state.showUK,
-                    api: _this4.props.api,
+                    toggleIcon: _.bind(_this6.toggleIcon, _this6),
+                    canRank: _this6.state.canRank,
+                    showUK: _this6.state.showUK,
+                    api: _this6.props.api,
                     key: listing.get(0),
-                    keys: _this4.props.keys,
+                    keys: _this6.props.keys,
                     listing: listing,
-                    headers: _this4.state.headers });
+                    headers: _this6.state.headers });
             });
             return React.createElement(
                 Grid,

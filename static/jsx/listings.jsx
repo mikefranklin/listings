@@ -1,6 +1,50 @@
 class Listings extends React.Component {
+    constructor(props) {
+        super(props)
+        app.on.headersUpdated.add(this.updateListings, this)
+        app.on.rankUpdated.add(this.updateRank, this)
+    }
+    updateRank(newRank) {
+        this.setState({canRank: newRank})
+    }
+    updateListings(s) {
+        this.setState({ headers: s.get("vheaders"),
+                        listings: s.get("listings"),
+                        rankings: s.get("rankings"),
+                        showUk: s.get("showUk"),
+                        canRank: s.get("canRank")
+                    })
+    }
     render() {
-        return <Row><Col md={12}>Listings</Col></Row>
+        if (!this.state) return false
+        var sortPos = +this.state.canRank,
+            headers = this.state.headers,
+            listings = this.state.listings
+                        .sortBy((_, index) => this.state.rankings.get(index)[sortPos])
+                        .map((l, lIndex) => (
+                            <Row key={l.key}>
+                            {l.data.reduce((cols, item, index) => cols.push(
+                                <ListingItem
+                                    key={headers.getIn([index, "_id"])}
+                                    ranking={!this.state.canRank ? null : this.state.rankings.get(lIndex)[2][index]}
+                                    data={item}
+                                    header={headers.get(lIndex)}
+                                />), Immutable.List())}
+                            </Row>
+                        ))
+                        .toList()
+        return <span>{listings}</span>
+    }
+}
+
+class ListingItem extends React.Component {
+    render() {
+        var cls = this.props.ranking === null ? {} : {className: "rank" + this.props.ranking}
+        return (
+            <Col md={1} {...cls}>
+            {this.props.data}
+            </Col>
+        )
     }
 }
 

@@ -20,23 +20,29 @@ var Control = (function (_React$Component) {
 
         var _this = _possibleConstructorReturn(this, Object.getPrototypeOf(Control).call(this, props));
 
-        _this.state = { canRank: false,
-            showUk: false,
-            canMove: false,
-            currentActivesOnly: true,
-            hidden: Immutable.List() };
         app.on.headersUpdated.add(_this.updateHeaders, _this);
+        app.on.rankUpdated.add(_this.updateRank, _this);
         return _this;
     }
 
     _createClass(Control, [{
+        key: "updateRank",
+        value: function updateRank(newRank) {
+            this.setState({ canRank: newRank });
+        }
+    }, {
         key: "updateHeaders",
-        value: function updateHeaders(visible, hidden) {
-            this.setState({ hidden: hidden });
+        value: function updateHeaders(s) {
+            this.setState({ hidden: s.get("hheaders"),
+                canRank: s.get("canRank"),
+                canMove: s.get("canMove"),
+                showUk: s.get("showUk"),
+                currentActivesOnly: s.get("currentActivesOnly") });
         }
     }, {
         key: "render",
         value: function render() {
+            if (!this.state) return false;
             var offOn = ["fa fa-circle-o", "fa fa-check"],
                 hidden = this.state.hidden.map(function (header) {
                 return React.createElement(
@@ -73,6 +79,7 @@ var Control = (function (_React$Component) {
                     React.createElement(
                         NavItem,
                         {
+                            onClick: app.on.canRankClicked.dispatch,
                             eventKey: 1 },
                         React.createElement("i", { className: offOn[+this.state.canRank] }),
                         " Rank"

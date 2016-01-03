@@ -16,24 +16,31 @@ var Header = (function (_React$Component) {
 
         var _this = _possibleConstructorReturn(this, Object.getPrototypeOf(Header).call(this, props));
 
-        _this.state = { showUk: false, canMove: false };
         app.on.headersUpdated.add(_this.updateHeaders, _this);
+        app.on.rankUpdated.add(_this.updateRank, _this);
         return _this;
     }
 
     _createClass(Header, [{
+        key: "updateRank",
+        value: function updateRank(newRank) {
+            this.setState({ canRank: newRank });
+        }
+    }, {
         key: "updateHeaders",
-        value: function updateHeaders(visible, hidden) {
-            this.setState({ headers: visible.sortBy(function (h) {
-                    return h.sequence;
-                }) });
+        value: function updateHeaders(s) {
+            this.setState({ headers: s.get("vheaders"),
+                hidden: s.get("hheaders"),
+                canMove: s.get("canMove"),
+                canRank: s.get("canRank"),
+                showUk: s.get("showUk") });
         }
     }, {
         key: "render",
         value: function render() {
             var _this2 = this;
 
-            if (!this.state.headers) return false;
+            if (!this.state) return false;
             var text = function text(h) {
                 return h.get(_this2.state.showUk && h.get("ukText") ? "ukText" : "text");
             },

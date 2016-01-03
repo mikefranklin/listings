@@ -4,17 +4,21 @@ class Control extends React.Component {
     // }
     constructor(props) {
         super(props)
-        this.state = {  canRank: false,
-                        showUk: false,
-                        canMove: false,
-                        currentActivesOnly: true,
-                        hidden: Immutable.List()}
         app.on.headersUpdated.add(this.updateHeaders, this)
+        app.on.rankUpdated.add(this.updateRank, this)
     }
-    updateHeaders(visible, hidden) {
-        this.setState({hidden: hidden})
+    updateRank(newRank) {
+        this.setState({canRank: newRank})
+    }
+    updateHeaders(s) {
+        this.setState({ hidden: s.get("hheaders"),
+                        canRank: s.get("canRank"),
+                        canMove: s.get("canMove"),
+                        showUk: s.get("showUk"),
+                        currentActivesOnly: s.get("currentActivesOnly")})
     }
     render() {
+        if (!this.state) return false
         var offOn = ["fa fa-circle-o", "fa fa-check"],
             hidden = this.state.hidden.map(header => (
                         <MenuItem
@@ -38,6 +42,7 @@ onClick={this.props.addNewField}>
                     </Navbar.Header>
                     <Nav>
                         <NavItem
+                            onClick={app.on.canRankClicked.dispatch}
                             eventKey={1}>
                             <i className={offOn[+this.state.canRank]}></i> Rank
                         </NavItem>

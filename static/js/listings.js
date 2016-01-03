@@ -1,5 +1,7 @@
 "use strict";
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -11,28 +13,88 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 var Listings = (function (_React$Component) {
     _inherits(Listings, _React$Component);
 
-    function Listings() {
+    function Listings(props) {
         _classCallCheck(this, Listings);
 
-        return _possibleConstructorReturn(this, Object.getPrototypeOf(Listings).apply(this, arguments));
+        var _this = _possibleConstructorReturn(this, Object.getPrototypeOf(Listings).call(this, props));
+
+        app.on.headersUpdated.add(_this.updateListings, _this);
+        app.on.rankUpdated.add(_this.updateRank, _this);
+        return _this;
     }
 
     _createClass(Listings, [{
+        key: "updateRank",
+        value: function updateRank(newRank) {
+            this.setState({ canRank: newRank });
+        }
+    }, {
+        key: "updateListings",
+        value: function updateListings(s) {
+            this.setState({ headers: s.get("vheaders"),
+                listings: s.get("listings"),
+                rankings: s.get("rankings"),
+                showUk: s.get("showUk"),
+                canRank: s.get("canRank")
+            });
+        }
+    }, {
         key: "render",
         value: function render() {
+            var _this2 = this;
+
+            if (!this.state) return false;
+            var sortPos = +this.state.canRank,
+                headers = this.state.headers,
+                listings = this.state.listings.sortBy(function (_, index) {
+                return _this2.state.rankings.get(index)[sortPos];
+            }).map(function (l, lIndex) {
+                return React.createElement(
+                    Row,
+                    { key: l.key },
+                    l.data.reduce(function (cols, item, index) {
+                        return cols.push(React.createElement(ListingItem, {
+                            key: headers.getIn([index, "_id"]),
+                            ranking: !_this2.state.canRank ? null : _this2.state.rankings.get(lIndex)[2][index],
+                            data: item,
+                            header: headers.get(lIndex)
+                        }));
+                    }, Immutable.List())
+                );
+            }).toList();
             return React.createElement(
-                Row,
+                "span",
                 null,
-                React.createElement(
-                    Col,
-                    { md: 12 },
-                    "Listings"
-                )
+                listings
             );
         }
     }]);
 
     return Listings;
+})(React.Component);
+
+var ListingItem = (function (_React$Component2) {
+    _inherits(ListingItem, _React$Component2);
+
+    function ListingItem() {
+        _classCallCheck(this, ListingItem);
+
+        return _possibleConstructorReturn(this, Object.getPrototypeOf(ListingItem).apply(this, arguments));
+    }
+
+    _createClass(ListingItem, [{
+        key: "render",
+        value: function render() {
+            var cls = this.props.ranking === null ? {} : { className: "rank" + this.props.ranking };
+            return React.createElement(
+                Col,
+                _extends({ md: 1 }, cls),
+                this.props.data
+            );
+        }
+    }]);
+
+    return ListingItem;
 })(React.Component);
 
 // class Listing extends React.Component {

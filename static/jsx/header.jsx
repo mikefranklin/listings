@@ -1,21 +1,28 @@
 class Header extends React.Component {
     constructor(props) {
         super(props)
-        this.state = {showUk: false, canMove: false}
         app.on.headersUpdated.add(this.updateHeaders, this)
+        app.on.rankUpdated.add(this.updateRank, this)
     }
-    updateHeaders(visible, hidden) {
-        this.setState({headers: visible.sortBy(h => h.sequence)})
+    updateRank(newRank) {
+        this.setState({canRank: newRank})
+    }
+    updateHeaders(s) {
+        this.setState({ headers: s.get("vheaders"),
+                        hidden: s.get("hheaders"),
+                        canMove: s.get("canMove"),
+                        canRank: s.get("canRank"),
+                        showUk: s.get("showUk")})
     }
     render() {
-        if (!this.state.headers) return false
+        if (!this.state) return false
         var text = (h) => h.get(this.state.showUk && h.get("ukText") ? "ukText" : "text"),
             items = this.state.headers.map(header => (
-            <HeaderItem
-                text={text(header)}
-                canMove={this.state.canMove}
-                key={header.get("_id")}
-                header={header}/>))
+                        <HeaderItem
+                            text={text(header)}
+                            canMove={this.state.canMove}
+                            key={header.get("_id")}
+                            header={header}/>))
          return (<Row className="header">{items}</Row>);
     }
 }
