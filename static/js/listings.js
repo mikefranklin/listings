@@ -57,7 +57,7 @@ var Listings = (function (_React$Component) {
                             key: headers.getIn([index, "_id"]),
                             ranking: !_this2.state.canRank ? null : _this2.state.rankings.get(lIndex)[2][index],
                             data: item,
-                            header: headers.get(lIndex)
+                            header: headers.get(index)
                         }));
                     }, Immutable.List())
                 );
@@ -85,11 +85,16 @@ var ListingItem = (function (_React$Component2) {
     _createClass(ListingItem, [{
         key: "render",
         value: function render() {
-            var cls = this.props.ranking === null ? {} : { className: "rank" + this.props.ranking };
+            var cls = this.props.ranking === null ? {} : { className: "rank" + this.props.ranking },
+                text = this.props.header.get("text") == "url" ? React.createElement(
+                "a",
+                { href: this.props.data },
+                "Redfin"
+            ) : this.props.data;
             return React.createElement(
                 Col,
                 _extends({ md: 1 }, cls),
-                this.props.data
+                text
             );
         }
     }]);

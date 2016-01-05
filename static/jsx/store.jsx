@@ -110,8 +110,9 @@ class App {
                                 : Math.floor((weight - min + 1) * mult)
                 r[1] = r[1] - (weight * multiplier)
                 r[2][index] = scaled
+                r[3][index] = weight * multiplier
                 return r
-        }, [alphaSort(l.data), 0, []]) // rank score + [0-9, ...] for each field
+        }, [alphaSort(l.data), 0, [], []]) // rank score + [0-9, ...] for each field
         )
     }
     getDisplableListingData() {

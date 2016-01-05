@@ -28,7 +28,7 @@ class Listings extends React.Component {
                                     key={headers.getIn([index, "_id"])}
                                     ranking={!this.state.canRank ? null : this.state.rankings.get(lIndex)[2][index]}
                                     data={item}
-                                    header={headers.get(lIndex)}
+                                    header={headers.get(index)}
                                 />), Immutable.List())}
                             </Row>
                         ))
@@ -39,10 +39,13 @@ class Listings extends React.Component {
 
 class ListingItem extends React.Component {
     render() {
-        var cls = this.props.ranking === null ? {} : {className: "rank" + this.props.ranking}
+        var cls = this.props.ranking === null ? {} : {className: "rank" + this.props.ranking},
+            text = this.props.header.get("text") == "url"
+                    ? <a href={this.props.data}>Redfin</a>
+                    : this.props.data
         return (
             <Col md={1} {...cls}>
-            {this.props.data}
+                {text}
             </Col>
         )
     }
