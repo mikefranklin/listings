@@ -303,12 +303,11 @@ class App extends React.Component { // props is js array of Immutable objects
             dtRef = [keys.last_loaded, "$date"],
             showable = props.headers.groupBy(h => h.get("show")),
             listings = this.updateMath(props),
-            uniques = Immutable.Map(props.headers // faster to convert the end result than use intermediate Set()
-                .filter(h => h.get("show"))
-                .map(h => [h.get("_id"),
-                            Immutable.Map(listings.reduce((set, l) => {set[l.get(h.get("_id"))] = true; return set}, {}))]
-                ))
-
+            uniques = Immutable.Map(showable.get(true)
+                        .map(h => [h.get("_id"),
+                            listings.map(l => l.get(h.get("_id")))
+                                .filter(v => v !== Infinity) // seems to be problematic in sets?
+                                .reduce((set, v) => set.add(v), Immutable.Set())]))
         this.state = {  maxDate: listings.maxBy(l => l.getIn(dtRef)).getIn(dtRef),
                         headers: showable.get(true),
                         hidden: showable.get(false),
@@ -632,16 +631,16 @@ class FieldEditor extends React.Component {
         this.setState(nextProps)
     }
     updateFieldValue(name, event) {
-        var buckets = {},
-            value = event.target.value;
+        var value = event.target.value,
+            buckets = {}
         if (/^bucket/.test(name)) this.props.setState({header: this.state.header.set(name, value), updateRanking: true})
         else this.props.setState({header: this.state.header.set(name, value)})
         if (name != "bucketSize") return
-        if (value == "*") this.props.uniques.keySeq().map(v => buckets[v] = [0, ""])
-        else if (value != "") this.props.uniques.keySeq()
-                                    .map(v => Math.floor(v / value)).toSet() // make unique
-                                    .map(v => v * value).sort()
-                                    .forEach(v => buckets[v] = [0, ""])
+        if (value == "*") buckets = this.props.uniques.reduce((m, v) => {m[v] = [0, ""]; return m}, {})
+        else if (value != "") buckets = this.props.uniques
+                                            .map(v => Math.floor(v / value) * value)
+                                            .toSet()
+                                            .reduce((m, v) => {m[v] = [0, ""]; return m}, {})
         this.props.setState({header: this.state.header.set("buckets", Immutable.fromJS(buckets))})
     }
     updateBuckets(bucket, event) {
