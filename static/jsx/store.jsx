@@ -64,7 +64,9 @@ class App {
                         .set("showUk", false)
         this.store = this.store.set("listings", this.getDisplableListingData())
         this.store = this.store.set("rankings", this.getRankingInfo())
-
+        this.maxRank = this.store.get("rankings")
+                            .reduce((list, l) => list.union(Immutable.Set(l[3])), Immutable.Set())
+                            .max()
         this.on.headersUpdated.dispatch(this.store, this.keys)
     }
     retryAjax(params, options) {
@@ -124,6 +126,18 @@ class App {
                                     && l.get(this.keys.status).toLowerCase() == "active"))
                     .map(l => ({key: l.get(0), data: indices.map(index => l.get(index))}))
     }
+    getGradientColor(percent) {
+        var hex = x => [parseInt(x.substr(0, 2), 16),
+                        parseInt(x.substr(0, 2), 16),
+                        parseInt(x.substr(2, 2), 16)],
+            start = hex("FFFFFF"),
+            end = hex("2EAADC"),
+            diff = start.map((s, index) => end[index] - s),
+            n2 = (n) => n.length == 1 ? "0" + n : n,
+            next = (n) => n2(( (diff[n] * percent) + start[n] ).toString(16).split('.')[0])
+        return "#" + next(0) + next(1) + next(2)
+    }
+
 }
 
 class AppX extends React.Component { // props is js array of Immutable objects

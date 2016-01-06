@@ -1,7 +1,5 @@
 "use strict";
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -55,7 +53,7 @@ var Listings = (function (_React$Component) {
                     l.data.reduce(function (cols, item, index) {
                         return cols.push(React.createElement(ListingItem, {
                             key: headers.getIn([index, "_id"]),
-                            ranking: !_this2.state.canRank ? null : _this2.state.rankings.get(lIndex)[2][index],
+                            ranking: !_this2.state.canRank ? null : _this2.state.rankings.get(lIndex)[3][index],
                             data: item,
                             header: headers.get(index)
                         }));
@@ -85,15 +83,17 @@ var ListingItem = (function (_React$Component2) {
     _createClass(ListingItem, [{
         key: "render",
         value: function render() {
-            var cls = this.props.ranking === null ? {} : { className: "rank" + this.props.ranking },
+            var style = { whiteSpace: "nowrap", overflow: "hidden",
+                backgroundColor: this.props.ranking === null ? "white" : app.getGradientColor(this.props.ranking / app.maxRank) },
                 text = this.props.header.get("text") == "url" ? React.createElement(
                 "a",
                 { href: this.props.data },
                 "Redfin"
             ) : this.props.data;
+            // cls = this.props.ranking === null ? {} : {className: "rank" + this.props.ranking},
             return React.createElement(
                 Col,
-                _extends({ md: 1 }, cls),
+                { md: 1, style: style, title: this.props.ranking + "/" + app.maxRank },
                 text
             );
         }

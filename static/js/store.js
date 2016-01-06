@@ -101,7 +101,9 @@ var App = (function () {
             })).set("canRank", canRank).set("currentActivesOnly", true).set("showUk", false);
             this.store = this.store.set("listings", this.getDisplableListingData());
             this.store = this.store.set("rankings", this.getRankingInfo());
-
+            this.maxRank = this.store.get("rankings").reduce(function (list, l) {
+                return list.union(Immutable.Set(l[3]));
+            }, Immutable.Set()).max();
             this.on.headersUpdated.dispatch(this.store, this.keys);
         }
     }, {
@@ -190,6 +192,25 @@ var App = (function () {
                         return l.get(index);
                     }) };
             });
+        }
+    }, {
+        key: "getGradientColor",
+        value: function getGradientColor(percent) {
+            var hex = function hex(x) {
+                return [parseInt(x.substr(0, 2), 16), parseInt(x.substr(0, 2), 16), parseInt(x.substr(2, 2), 16)];
+            },
+                start = hex("FFFFFF"),
+                end = hex("2EAADC"),
+                diff = start.map(function (s, index) {
+                return end[index] - s;
+            }),
+                n2 = function n2(n) {
+                return n.length == 1 ? "0" + n : n;
+            },
+                next = function next(n) {
+                return n2((diff[n] * percent + start[n]).toString(16).split('.')[0]);
+            };
+            return "#" + next(0) + next(1) + next(2);
         }
     }]);
 
