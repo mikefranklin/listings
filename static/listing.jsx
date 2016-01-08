@@ -12,6 +12,15 @@ class ListingApp {
         this.colors = ["#CBEAF6","#B9E3F3","#A8DCF0","#96D5ED","#87CEEB","#73C7E7","#62BFE4","#51B8E1","#3FB1DE","#2EAADC"]
         return this
     }
+    getGradientColor(percent) {
+        var hex = x => x.match(/(..)/g).map(x => parseInt(x, 16)),
+            start = hex("FFFFFF"),
+            end = hex("7487ee"),
+            diff = start.map((s, index) => end[index] - s),
+            n2 = (n) => n.length == 1 ? "0" + n : n,
+            next = (n) => n2(( (diff[n] * percent) + start[n] ).toString(16).split('.')[0])
+        return "#" + next(0) + next(1) + next(2)
+    }
     loadAndRenderData() {
         this.retryAjax({}, {api: "/getalldata", type: "get"})
             .done(function(content) { // headers, listings, keys, api
@@ -278,6 +287,9 @@ class ListingItem extends React.Component {
         if (p.canRank && h.get("bucketSize") && h.get("buckets")) {
             bucket = Math.floor(value / h.get("bucketSize")) * h.get("bucketSize")
             bucketColor = h.getIn(["buckets", String(bucket), 1])
+
+            bucketColor = app.getGradientColor(h.getIn(["buckets", String(bucket), 0]) *
+                                                parseInt(h.get("bucketMultiplier") || 1)/1000)
             if (bucketColor) _.extend(style, {backgroundColor: bucketColor})
         }
         return (

@@ -36,6 +36,27 @@ var ListingApp = (function () {
     }
 
     _createClass(ListingApp, [{
+        key: "getGradientColor",
+        value: function getGradientColor(percent) {
+            var hex = function hex(x) {
+                return x.match(/(..)/g).map(function (x) {
+                    return parseInt(x, 16);
+                });
+            },
+                start = hex("FFFFFF"),
+                end = hex("7487ee"),
+                diff = start.map(function (s, index) {
+                return end[index] - s;
+            }),
+                n2 = function n2(n) {
+                return n.length == 1 ? "0" + n : n;
+            },
+                next = function next(n) {
+                return n2((diff[n] * percent + start[n]).toString(16).split('.')[0]);
+            };
+            return "#" + next(0) + next(1) + next(2);
+        }
+    }, {
         key: "loadAndRenderData",
         value: function loadAndRenderData() {
             this.retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
@@ -463,6 +484,8 @@ var ListingItem = (function (_React$Component5) {
             if (p.canRank && h.get("bucketSize") && h.get("buckets")) {
                 bucket = Math.floor(value / h.get("bucketSize")) * h.get("bucketSize");
                 bucketColor = h.getIn(["buckets", String(bucket), 1]);
+
+                bucketColor = app.getGradientColor(h.getIn(["buckets", String(bucket), 0]) * parseInt(h.get("bucketMultiplier") || 1) / 1000);
                 if (bucketColor) _.extend(style, { backgroundColor: bucketColor });
             }
             return React.createElement(
