@@ -20,13 +20,13 @@ class Listings extends React.Component {
         var sortPos = +this.state.canRank,
             headers = this.state.headers,
             listings = this.state.listings
-                        .sortBy((_, index) => this.state.rankings.get(index)[sortPos])
-                        .map((l, lIndex) => (
+                        .sortBy(l => l.ranking[sortPos])
+                        .map(l => (
                             <Row key={l.key}>
                             {l.data.reduce((cols, item, index) => cols.push(
                                 <ListingItem
                                     key={headers.getIn([index, "_id"])}
-                                    ranking={!this.state.canRank ? null : this.state.rankings.get(lIndex)[3][index]}
+                                    ranking={!this.state.canRank ? null : l.ranking[2][index]}
                                     data={item}
                                     header={headers.get(index)}
                                 />), Immutable.List())}

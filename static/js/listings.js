@@ -1,6 +1,6 @@
 "use strict";
 
-var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -8,7 +8,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var Listings = (function (_React$Component) {
+var Listings = function (_React$Component) {
     _inherits(Listings, _React$Component);
 
     function Listings(props) {
@@ -44,16 +44,16 @@ var Listings = (function (_React$Component) {
             if (!this.state) return false;
             var sortPos = +this.state.canRank,
                 headers = this.state.headers,
-                listings = this.state.listings.sortBy(function (_, index) {
-                return _this2.state.rankings.get(index)[sortPos];
-            }).map(function (l, lIndex) {
+                listings = this.state.listings.sortBy(function (l) {
+                return l.ranking[sortPos];
+            }).map(function (l) {
                 return React.createElement(
                     Row,
                     { key: l.key },
                     l.data.reduce(function (cols, item, index) {
                         return cols.push(React.createElement(ListingItem, {
                             key: headers.getIn([index, "_id"]),
-                            ranking: !_this2.state.canRank ? null : _this2.state.rankings.get(lIndex)[3][index],
+                            ranking: !_this2.state.canRank ? null : l.ranking[2][index],
                             data: item,
                             header: headers.get(index)
                         }));
@@ -69,9 +69,9 @@ var Listings = (function (_React$Component) {
     }]);
 
     return Listings;
-})(React.Component);
+}(React.Component);
 
-var ListingItem = (function (_React$Component2) {
+var ListingItem = function (_React$Component2) {
     _inherits(ListingItem, _React$Component2);
 
     function ListingItem() {
@@ -100,7 +100,7 @@ var ListingItem = (function (_React$Component2) {
     }]);
 
     return ListingItem;
-})(React.Component);
+}(React.Component);
 
 // class Listing extends React.Component {
 //     shouldComponentUpdate(nextProps, nextState) {

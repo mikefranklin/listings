@@ -7,13 +7,13 @@ $('.fancybox-media').fancybox({
   helpers : { media : {}}
 */
 
-var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
 
-var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-
-function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
 
 function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
 
@@ -21,7 +21,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var App = (function () {
+var App = function () {
     function App() {
         var _this = this;
 
@@ -61,14 +61,14 @@ var App = (function () {
     }, {
         key: "loadData",
         value: function loadData() {
-            this.retryAjax({}, { api: "/getalldata", type: "get" }).done((function (content) {
+            this.retryAjax({}, { api: "/getalldata", type: "get" }).done(function (content) {
                 // headers, listings, keys, api
                 console.log(content);
                 $.getScript("https://maps.googleapis.com/maps/api/js?key=" + content.api);
                 this.processRawData(content);
-            }).bind(this)).fail((function () {
+            }.bind(this)).fail(function () {
                 console.log(arguments);
-            }).bind(this));
+            }.bind(this));
         }
     }, {
         key: "toggleCanRank",
@@ -100,9 +100,9 @@ var App = (function () {
                 return h.get("text");
             })).set("canRank", canRank).set("currentActivesOnly", true).set("showUk", false);
             this.store = this.store.set("listings", this.getDisplableListingData());
-            this.store = this.store.set("rankings", this.getRankingInfo());
-            this.maxRank = this.store.get("rankings").reduce(function (list, l) {
-                return list.union(Immutable.Set(l[3]));
+            this.store = this.store.set("listings", this.addRankingInfo());
+            this.maxRank = this.store.get("listings").reduce(function (list, l) {
+                return list.union(l.ranking[3]);
             }, Immutable.Set()).max();
             this.on.headersUpdated.dispatch(this.store, this.keys);
         }
@@ -130,8 +130,8 @@ var App = (function () {
         } // function retryAjax
 
     }, {
-        key: "getRankingInfo",
-        value: function getRankingInfo() {
+        key: "addRankingInfo",
+        value: function addRankingInfo() {
             var sortVal = function sortVal(value) {
                 return (/^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value
                 );
@@ -151,7 +151,7 @@ var App = (function () {
                 return [min, max, mult, buckets.toJS(), h.get("bucketSize"), parseInt(h.get("bucketMultiplier") || 1)];
             }).toList();
             return this.store.get("listings").map(function (l) {
-                return l.data.reduce(function (r, item, index) {
+                l.ranking = l.data.reduce(function (r, item, index) {
                     var _headers$get = headers.get(index);
 
                     var _headers$get2 = _slicedToArray(_headers$get, 6);
@@ -168,12 +168,26 @@ var App = (function () {
                         weight = parseInt(buckets[bucket] || 0),
                         scaled = weight == min ? 0 : weight && weight == max ? 9 : Math.floor((weight - min + 1) * mult);
                     r[1] = r[1] - weight * multiplier;
-                    r[2][index] = scaled;
-                    r[3][index] = weight * multiplier;
+                    r[2][index] = weight * multiplier;
+                    r[3] = r[3].add(weight * multiplier);
                     return r;
-                }, [alphaSort(l.data), 0, [], []]);
-            } // rank score + [0-9, ...] for each field
-            );
+                }, [alphaSort(l.data), 0, [], Immutable.Set()]);
+                return l;
+            });
+            //
+            // return this.store.get("listings").map(l => l.data.reduce((r, item, index) => {
+            //         var [min, max, mult, buckets, size, multiplier] = headers.get(index)
+            //         if (!size) return r
+            //         var bucket = Math.floor(item / size) * size,
+            //             weight = parseInt(buckets[bucket] || 0),
+            //             scaled = weight == min ? 0 : weight && weight == max ? 9
+            //                         : Math.floor((weight - min + 1) * mult)
+            //         r[1] = r[1] - (weight * multiplier)
+            //         r[2][index] = scaled
+            //         r[3] = r[3].add(weight * multiplier)
+            //         return r
+            // }, [alphaSort(l.data), 0, [], Immutable.Set()]) // rank score + [0-9, ...] for each field
+            // )
         }
     }, {
         key: "getDisplableListingData",
@@ -197,10 +211,12 @@ var App = (function () {
         key: "getGradientColor",
         value: function getGradientColor(percent) {
             var hex = function hex(x) {
-                return [parseInt(x.substr(0, 2), 16), parseInt(x.substr(0, 2), 16), parseInt(x.substr(2, 2), 16)];
+                return x.match(/(..)/g).map(function (x) {
+                    return parseInt(x, 16);
+                });
             },
                 start = hex("FFFFFF"),
-                end = hex("2EAADC"),
+                end = hex("7487ee"),
                 diff = start.map(function (s, index) {
                 return end[index] - s;
             }),
@@ -215,9 +231,9 @@ var App = (function () {
     }]);
 
     return App;
-})();
+}();
 
-var AppX = (function (_React$Component) {
+var AppX = function (_React$Component) {
     _inherits(AppX, _React$Component);
 
     // props is js array of Immutable objects
@@ -376,11 +392,11 @@ var AppX = (function (_React$Component) {
         key: "updateListingDB",
         value: function updateListingDB(id, headerName, value) {
             var data = { id: id, headername: headerName, value: value };
-            app.retryAjax(JSON.stringify(data), { api: "savelistingdata", type: "post" }).done((function (content) {
+            app.retryAjax(JSON.stringify(data), { api: "savelistingdata", type: "post" }).done(function (content) {
                 console.log("saving listing value worked!", content);
-            }).bind(this)).fail((function () {
+            }.bind(this)).fail(function () {
                 console.log("failed", arguments);
-            }).bind(this));
+            }.bind(this));
         }
     }, {
         key: "updateMath",
@@ -481,12 +497,12 @@ var AppX = (function (_React$Component) {
                 return h.get("_id") == header.get("_id");
             });
             this.setState({ headers: this.state.headers.set(index, header) });
-            app.retryAjax(JSON.stringify(header), { api: "/saveheader", type: "post" }).done((function (content) {
+            app.retryAjax(JSON.stringify(header), { api: "/saveheader", type: "post" }).done(function (content) {
                 console.log("saving header worked!", header, arguments);
                 if (updateRanking && this.state.canRank) this.toggleRank(true);
-            }).bind(this)).fail((function () {
+            }.bind(this)).fail(function () {
                 console.log(arguments);
-            }).bind(this));
+            }.bind(this));
         }
     }, {
         key: "saveHeaderValue",
@@ -495,11 +511,11 @@ var AppX = (function (_React$Component) {
                 data: headers !== null ? headers.map(function (h) {
                     return [h.get("_id"), h.get(redfin)];
                 }).toJS() : [[id, value]] };
-            app.retryAjax(JSON.stringify(data), { api: "/saveheadervalue", type: "post" }).done((function (content) {
+            app.retryAjax(JSON.stringify(data), { api: "/saveheadervalue", type: "post" }).done(function (content) {
                 console.log("saving header value worked!", data, arguments);
-            }).bind(this)).fail((function () {
+            }.bind(this)).fail(function () {
                 console.log(arguments);
-            }).bind(this));
+            }.bind(this));
         }
     }, {
         key: "addNewField",
@@ -525,11 +541,11 @@ var AppX = (function (_React$Component) {
                 })
             });
 
-            app.retryAjax(JSON.stringify(header), { api: "/savenewfield", type: "post" }).done((function (content) {
+            app.retryAjax(JSON.stringify(header), { api: "/savenewfield", type: "post" }).done(function (content) {
                 console.log("added new field!", arguments);
-            }).bind(this)).fail((function () {
+            }.bind(this)).fail(function () {
                 console.log(arguments);
-            }).bind(this));
+            }.bind(this));
         }
     }, {
         key: "toggleIcon",
@@ -596,5 +612,5 @@ var AppX = (function (_React$Component) {
     }]);
 
     return AppX;
-})(React.Component);
+}(React.Component);
 //# sourceMappingURL=/Users/michaelfranklin/Developer/personal/python/house/static/js/store.js.map

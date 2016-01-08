@@ -63,9 +63,9 @@ class App {
                         .set("currentActivesOnly", true)
                         .set("showUk", false)
         this.store = this.store.set("listings", this.getDisplableListingData())
-        this.store = this.store.set("rankings", this.getRankingInfo())
-        this.maxRank = this.store.get("rankings")
-                            .reduce((list, l) => list.union(Immutable.Set(l[3])), Immutable.Set())
+        this.store = this.store.set("listings", this.addRankingInfo())
+        this.maxRank = this.store.get("listings")
+                            .reduce((list, l) => list.union(l.ranking[3]), Immutable.Set())
                             .max()
         this.on.headersUpdated.dispatch(this.store, this.keys)
     }
@@ -90,7 +90,7 @@ class App {
         return def.promise()
     } // function retryAjax
 
-    getRankingInfo() {
+    addRankingInfo() {
         var sortVal = value => /^\d+$/.test(value) ? String(1000000 + parseInt(value)).substr(1) : value,
             alphaSort = l => l.take(6).reduce((s, v) => s + "$" + sortVal(v), ""),
             headers = this.store.get("vheaders")
@@ -103,19 +103,35 @@ class App {
                                     parseInt(h.get("bucketMultiplier") || 1)]
                             })
                             .toList()
-        return this.store.get("listings").map(l => l.data.reduce((r, item, index) => {
-                var [min, max, mult, buckets, size, multiplier] = headers.get(index)
-                if (!size) return r
-                var bucket = Math.floor(item / size) * size,
-                    weight = parseInt(buckets[bucket] || 0),
-                    scaled = weight == min ? 0 : weight && weight == max ? 9
-                                : Math.floor((weight - min + 1) * mult)
-                r[1] = r[1] - (weight * multiplier)
-                r[2][index] = scaled
-                r[3][index] = weight * multiplier
-                return r
-        }, [alphaSort(l.data), 0, [], []]) // rank score + [0-9, ...] for each field
-        )
+        return this.store.get("listings").map(l => {
+            l.ranking = l.data.reduce((r, item, index) => {
+                    var [min, max, mult, buckets, size, multiplier] = headers.get(index)
+                    if (!size) return r
+                    var bucket = Math.floor(item / size) * size,
+                        weight = parseInt(buckets[bucket] || 0),
+                        scaled = weight == min ? 0 : weight && weight == max ? 9
+                                    : Math.floor((weight - min + 1) * mult)
+                    r[1] = r[1] - (weight * multiplier)
+                    r[2][index] = weight * multiplier
+                    r[3] = r[3].add(weight * multiplier)
+                    return r
+            }, [alphaSort(l.data), 0, [], Immutable.Set()])
+            return l
+        })
+        //
+        // return this.store.get("listings").map(l => l.data.reduce((r, item, index) => {
+        //         var [min, max, mult, buckets, size, multiplier] = headers.get(index)
+        //         if (!size) return r
+        //         var bucket = Math.floor(item / size) * size,
+        //             weight = parseInt(buckets[bucket] || 0),
+        //             scaled = weight == min ? 0 : weight && weight == max ? 9
+        //                         : Math.floor((weight - min + 1) * mult)
+        //         r[1] = r[1] - (weight * multiplier)
+        //         r[2][index] = scaled
+        //         r[3] = r[3].add(weight * multiplier)
+        //         return r
+        // }, [alphaSort(l.data), 0, [], Immutable.Set()]) // rank score + [0-9, ...] for each field
+        // )
     }
     getDisplableListingData() {
         var indices = this.store.get("vheaders")
@@ -127,17 +143,14 @@ class App {
                     .map(l => ({key: l.get(0), data: indices.map(index => l.get(index))}))
     }
     getGradientColor(percent) {
-        var hex = x => [parseInt(x.substr(0, 2), 16),
-                        parseInt(x.substr(0, 2), 16),
-                        parseInt(x.substr(2, 2), 16)],
+        var hex = x => x.match(/(..)/g).map(x => parseInt(x, 16)),
             start = hex("FFFFFF"),
-            end = hex("2EAADC"),
+            end = hex("7487ee"),
             diff = start.map((s, index) => end[index] - s),
-            n2 = (n) => n.length == 1 ? "0" + n : n,
-            next = (n) => n2(( (diff[n] * percent) + start[n] ).toString(16).split('.')[0])
+            n2 = n => n.length == 1 ? "0" + n : n,
+            next = n => n2(( (diff[n] * percent) + start[n] ).toString(16).split('.')[0])
         return "#" + next(0) + next(1) + next(2)
     }
-
 }
 
 class AppX extends React.Component { // props is js array of Immutable objects
